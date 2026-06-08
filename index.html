@@ -685,13 +685,16 @@ input[type=range]:focus{border:none;outline:none;}
 
     <!-- ══ INSTAGRAM ══════════════════════════════ -->
     <div class="page" id="page-ig">
-      <div style="display:flex;align-items:center;margin-bottom:4px;">
-        <div><div class="page-title">Instagram</div><div class="page-subtitle">Atualize suas métricas semanalmente para acompanhar o crescimento</div></div>
-        <button class="btn btn-primary" style="margin-left:auto;" onclick="G.toggle('ig-update-form')">📊 Atualizar métricas</button>
+      <div style="display:flex;align-items:center;margin-bottom:12px;">
+        <div><div class="page-title">Instagram</div><div class="page-subtitle">Dados ao vivo via Instagram Graph API</div></div>
+        <button class="btn btn-primary" style="margin-left:auto;" onclick="G.toggle('ig-update-form')">📊 Registro manual</button>
       </div>
 
-      <!-- Formulário de atualização -->
-      <div class="fp" id="ig-update-form" style="margin-bottom:16px;">
+      <!-- Bloco de conexão API -->
+      <div id="ig-connect"></div>
+
+      <!-- Formulário manual (backup/histórico) -->
+      <div class="fp" id="ig-update-form" style="margin-bottom:16px;display:none;">
         <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px;">Insira os dados do seu Instagram (veja no app → Insights)</div>
         <div class="fr">
           <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Seguidores</label><input type="number" id="ig-f-followers" placeholder="ex: 8420"></div>
@@ -904,6 +907,11 @@ const INIT={
 
 let ST=JSON.parse(localStorage.getItem('gcnotion')||'null')||JSON.parse(JSON.stringify(INIT));
 ['agY','agM','edY','edM','agSelDate','edSelDate','netSelectedId','blogSelectedId','blogMode','igToken','edSelectedPostId'].forEach(k=>{if(ST[k]===undefined)ST[k]=INIT[k]===undefined?'':INIT[k];});
+if(!ST.igMetrics)ST.igMetrics=[];
+if(ST.igProfile===undefined)ST.igProfile=null;
+if(ST.igMedia===undefined)ST.igMedia=null;
+if(ST.igTokenExpiry===undefined)ST.igTokenExpiry=null;
+if(ST.igLastFetch===undefined)ST.igLastFetch=null;
 if(!ST.blogPosts)ST.blogPosts=INIT.blogPosts;
 ST.contacts.forEach(c=>{if(!c.projects)c.projects=[];if(!c.interactions)c.interactions=[];});
 function save(){localStorage.setItem('gcnotion',JSON.stringify(ST));}
@@ -1185,9 +1193,19 @@ const G={
   igConnect(){
     const t=document.getElementById('ig-token-input')?.value?.trim();
     if(!t){showToast('⚠️','Cole um token válido');return;}
-    ST.igToken=t;save();showToast('✅','Instagram conectado!');renderIG();
+    ST.igToken=t;
+    ST.igProfile=null;ST.igMedia=null;ST.igLastFetch=null;
+    // Long-lived tokens duram 60 dias
+    ST.igTokenExpiry=Date.now()+(60*86400000);
+    save();renderIG();
+    showToast('🔄','Buscando dados do Instagram...');
+    fetchIGData();
   },
-  igDisconnect(){ST.igToken='';save();renderIG();},
+  igDisconnect(){
+    ST.igToken='';ST.igProfile=null;ST.igMedia=null;
+    ST.igTokenExpiry=null;ST.igLastFetch=null;
+    save();renderIG();
+  },
 
   // ─ EDITORIAL NOTES ─
   savePostNotes(id,val){
@@ -1508,44 +1526,84 @@ function renderIG(){
   const connectEl=document.getElementById('ig-connect');
   if(connectEl) connectEl.innerHTML=renderIGConnect();
 
-  // KPIs — real if token, simulated otherwise
-  if(ST.igToken){
-    fetchIGData(ST.igToken);
+  const hasData=!!(ST.igProfile && ST.igProfile.id);
+  const metrics=ST.igMetrics||[];
+  const latest=metrics.slice(-1)[0];
+
+  // KPIs
+  if(hasData){
+    const p=ST.igProfile;
+    const media=ST.igMedia||[];
+    const totalEng=media.reduce((s,m)=>(s+(m.like_count||0)+(m.comments_count||0)),0);
+    const engRate=media.length&&p.followers_count?((totalEng/media.length)/p.followers_count*100).toFixed(1):'—';
+    document.getElementById('ig-kpis').innerHTML=`
+      <div class="kpi"><div class="kpi-v">${(p.followers_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--green);">@${p.username}</div></div>
+      <div class="kpi"><div class="kpi-v">${(p.media_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Posts publicados</div></div>
+      <div class="kpi"><div class="kpi-v">${engRate}%</div><div class="kpi-l">Eng. médio</div><div class="kpi-d">Últimos ${media.length} posts</div></div>
+      <div class="kpi"><div class="kpi-v" style="color:var(--green);font-size:18px;">🔗</div><div class="kpi-l">API ao vivo</div><div class="kpi-d" style="color:var(--t3);">${ST.igLastFetch?new Date(ST.igLastFetch).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}</div></div>`;
+  } else if(latest){
+    document.getElementById('ig-kpis').innerHTML=`
+      <div class="kpi"><div class="kpi-v">${(latest.followers||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--t3);">📋 Manual</div></div>
+      <div class="kpi"><div class="kpi-v">${latest.reach?(latest.reach).toLocaleString('pt-BR'):'—'}</div><div class="kpi-l">Alcance semana</div></div>
+      <div class="kpi"><div class="kpi-v">${latest.engFeed?latest.engFeed+'%':'—'}</div><div class="kpi-l">Eng. Feed</div></div>
+      <div class="kpi"><div class="kpi-v">${latest.newFollowers?'+'+latest.newFollowers:'—'}</div><div class="kpi-l">Novos seguidores</div></div>`;
   } else {
     document.getElementById('ig-kpis').innerHTML=`
-      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--t3);">Conecte sua conta</div></div>
-      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Engajamento</div></div>
-      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Alcance mensal</div></div>
-      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Visitas ao perfil</div></div>`;
+      <div class="kpi"><div class="kpi-v" style="color:var(--t3);">—</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--t3);">Conecte a API</div></div>
+      <div class="kpi"><div class="kpi-v" style="color:var(--t3);">—</div><div class="kpi-l">Engajamento</div></div>
+      <div class="kpi"><div class="kpi-v" style="color:var(--t3);">—</div><div class="kpi-l">Posts totais</div></div>
+      <div class="kpi"><div class="kpi-v" style="color:var(--t3);">—</div><div class="kpi-l">API status</div></div>`;
   }
 
-  document.getElementById('ig-kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-v">8.420</div><div class="kpi-l">Seguidores</div><div class="kpi-d up">+127 esta semana</div></div>
-    <div class="kpi"><div class="kpi-v">4,8%</div><div class="kpi-l">Engajamento</div><div class="kpi-d up">+0,3% vs semana ant.</div></div>
-    <div class="kpi"><div class="kpi-v">45,2k</div><div class="kpi-l">Alcance mensal</div><div class="kpi-d up">+18% vs mês ant.</div></div>
-    <div class="kpi"><div class="kpi-v">2.340</div><div class="kpi-l">Visitas ao perfil</div><div class="kpi-d up">+9% esta semana</div></div>`;
+  // Posts recentes (API real)
+  const postsEl=document.getElementById('ig-posts');
+  if(postsEl){
+    if(hasData&&ST.igMedia&&ST.igMedia.length){
+      const p=ST.igProfile;
+      postsEl.innerHTML=ST.igMedia.slice(0,6).map(m=>{
+        const emoji=m.media_type==='VIDEO'?'🎬':m.media_type==='CAROUSEL_ALBUM'?'🖼️':'📸';
+        const caption=(m.caption||'').slice(0,55)+(m.caption&&m.caption.length>55?'...':'');
+        const eng=m.like_count&&p.followers_count?((m.like_count/p.followers_count)*100).toFixed(1)+'%':'—';
+        const date=m.timestamp?new Date(m.timestamp).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):'';
+        return `<div class="post-row"><div class="post-th">${emoji}</div><div class="post-b"><div class="post-t">${caption||'Sem legenda'}</div><div class="post-m">❤️ ${(m.like_count||0).toLocaleString('pt-BR')} · 💬 ${(m.comments_count||0).toLocaleString('pt-BR')} · ${date}</div></div><a href="${m.permalink||'#'}" target="_blank" class="post-e" style="text-decoration:none;color:var(--purple);">${eng}</a></div>`;
+      }).join('');
+    } else {
+      postsEl.innerHTML='<div class="empty" style="padding:16px;">Conecte a API para ver posts recentes com engajamento real</div>';
+    }
+  }
 
-  const follData=[7800,7820,7850,7860,7900,7920,7940,7980,7990,8010,8020,8060,8080,8100,8110,8140,8160,8200,8220,8250,8270,8300,8330,8360,8370,8380,8400,8410,8415,8420];
-  const days=Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
+  // Gráficos com dados históricos manuais
   dc('ig');dc('ig-eng');
   setTimeout(()=>{
     Chart.defaults.color='#636262';Chart.defaults.font.family='Inter';
-    const c1=document.getElementById('chart-ig');if(!c1)return;
     const opts={plugins:{legend:{display:false},tooltip:{backgroundColor:'#252525',borderColor:'#333',borderWidth:1,padding:8,bodyFont:{family:'Inter'}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:9},maxTicksLimit:7}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10}}}}};
-    charts['ig']=new Chart(c1,{type:'line',data:{labels:days,datasets:[{data:follData,borderColor:'#9065B0',backgroundColor:'rgba(144,101,176,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:2}]},options:opts});
+    const c1=document.getElementById('chart-ig');if(!c1)return;
+    if(metrics.length>=2){
+      const labels=metrics.slice(-14).map(m=>m.date.slice(5));
+      const follData=metrics.slice(-14).map(m=>m.followers||0);
+      charts['ig']=new Chart(c1,{type:'line',data:{labels,datasets:[{data:follData,borderColor:'#9065B0',backgroundColor:'rgba(144,101,176,.08)',tension:.4,fill:true,pointRadius:3,borderWidth:2}]},options:opts});
+    } else {
+      const empty=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
+      charts['ig']=new Chart(c1,{type:'line',data:{labels:empty,datasets:[{data:Array(7).fill(null),borderColor:'#9065B0',backgroundColor:'rgba(144,101,176,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:2}]},options:{...opts,plugins:{...opts.plugins,tooltip:{...opts.plugins.tooltip,callbacks:{label:()=>'Adicione registros manuais'}}}}});
+    }
     const c2=document.getElementById('chart-ig-eng');if(!c2)return;
-    charts['ig-eng']=new Chart(c2,{type:'bar',data:{labels:['Feed','Reels','Stories'],datasets:[{label:'%',data:[3.2,7.8,1.9],backgroundColor:['rgba(35,131,226,.3)','rgba(217,115,13,.3)','rgba(144,101,176,.3)'],borderColor:['#2383E2','#D9730D','#9065B0'],borderWidth:2,borderRadius:4}]},options:{plugins:{legend:{display:false},tooltip:{backgroundColor:'#252525',borderColor:'#333',borderWidth:1,padding:8,bodyFont:{family:'Inter'}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10}},beginAtZero:true}}}});
+    const lat=metrics.slice(-1)[0];
+    const engVals=lat?[lat.engFeed||0,lat.engReels||0,lat.engStories||0]:[0,0,0];
+    charts['ig-eng']=new Chart(c2,{type:'bar',data:{labels:['Feed','Reels','Stories'],datasets:[{label:'%',data:engVals,backgroundColor:['rgba(35,131,226,.3)','rgba(217,115,13,.3)','rgba(144,101,176,.3)'],borderColor:['#2383E2','#D9730D','#9065B0'],borderWidth:2,borderRadius:4}]},options:{plugins:{legend:{display:false},tooltip:{backgroundColor:'#252525',borderColor:'#333',borderWidth:1,padding:8,bodyFont:{family:'Inter'}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10}},beginAtZero:true}}}});
   },50);
 
-  document.getElementById('ig-posts').innerHTML=[
-    {t:'🎬',title:'Rotina de manhã — Vlog',eng:'9,2%',likes:'1.240',cm:'87'},
-    {t:'📸',title:'Bastidores do escritório',eng:'6,8%',likes:'892',cm:'44'},
-    {t:'🎬',title:'3 erros de novatos no marketing',eng:'6,1%',likes:'820',cm:'63'},
-    {t:'📸',title:'Carrossel — dicas de copy',eng:'5,4%',likes:'710',cm:'31'},
-  ].map(p=>`<div class="post-row"><div class="post-th">${p.t}</div><div class="post-b"><div class="post-t">${p.title}</div><div class="post-m">❤️ ${p.likes} · 💬 ${p.cm}</div></div><span class="post-e">${p.eng}</span></div>`).join('');
+  // Histórico de registros manuais
+  const histEl=document.getElementById('ig-history');
+  if(histEl) histEl.innerHTML=metrics.length?metrics.slice(-6).reverse().map(m=>`
+    <div class="db-row" style="padding:7px 10px;margin-bottom:2px;font-size:12px;">
+      <span style="color:var(--t3);">${m.date}</span>
+      <span style="font-weight:600;">${(m.followers||0).toLocaleString('pt-BR')} seg.</span>
+      ${m.newFollowers?`<span class="prop prop-green" style="font-size:10px;">+${m.newFollowers}</span>`:''}
+      ${m.reach?`<span class="prop prop-blue" style="font-size:10px;">${m.reach.toLocaleString('pt-BR')} alcance</span>`:''}
+    </div>`).join(''):'<div class="empty">Sem registros ainda — use "Registro manual"</div>';
 
   document.getElementById('ig-tips').innerHTML=[
-    {icon:'🎬',tip:'Reels têm 3× mais alcance que Feed. Aumente para 3–4 por semana.'},
+    {icon:'🎬',tip:'Reels têm 3× mais alcance que Feed. Aumente para 3–4/semana.'},
     {icon:'⏰',tip:'Melhor horário: 18h–21h. Agende posts nesse período.'},
     {icon:'💬',tip:'Responder comentários nas 2 primeiras horas aumenta 40% o alcance.'},
     {icon:'📊',tip:'Posts com CTA explícito têm 2,3× mais salvamentos.'},
@@ -1994,51 +2052,72 @@ function renderNewsEl(el, items){
 // ══════════════════════════════════════════════════════════════
 //  INSTAGRAM — TOKEN AUTH & REAL DATA
 // ══════════════════════════════════════════════════════════════
-async function fetchIGData(token){
-  try {
-    const r = await fetch(`https://graph.instagram.com/me?fields=id,username,followers_count,media_count,biography&access_token=${token}`);
-    const data = await r.json();
-    if(data.error){ showToast('⚠️','Token inválido ou expirado'); return; }
-    const kpis = document.getElementById('ig-kpis');
-    if(kpis) kpis.innerHTML=`
-      <div class="kpi"><div class="kpi-v">${(data.followers_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--green);">@${data.username}</div></div>
-      <div class="kpi"><div class="kpi-v">${(data.media_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Posts publicados</div></div>
-      <div class="kpi"><div class="kpi-v" style="font-size:16px;color:var(--t2);">Real</div><div class="kpi-l">Dados ao vivo</div></div>
-      <div class="kpi"><div class="kpi-v" style="font-size:16px;color:var(--green);">✓</div><div class="kpi-l">API conectada</div></div>`;
-    // Fetch recent media
-    const mr = await fetch(`https://graph.instagram.com/me/media?fields=id,caption,media_type,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=5&access_token=${token}`);
-    const mdata = await mr.json();
-    if(mdata.data){
-      const postsEl = document.getElementById('ig-posts');
-      if(postsEl) postsEl.innerHTML = mdata.data.map(p=>{
-        const emoji = p.media_type==='VIDEO'?'🎬':p.media_type==='CAROUSEL_ALBUM'?'🖼️':'📸';
-        const caption = (p.caption||'').slice(0,60)+(p.caption?.length>60?'...':'');
-        const eng = p.like_count ? ((p.like_count/(data.followers_count||1))*100).toFixed(1)+'%' : '—';
-        return `<div class="post-row"><div class="post-th">${emoji}</div><div class="post-b"><div class="post-t">${caption||'Sem legenda'}</div><div class="post-m">❤️ ${(p.like_count||0).toLocaleString('pt-BR')} · 💬 ${(p.comments_count||0).toLocaleString('pt-BR')}</div></div><span class="post-e">${eng}</span></div>`;
-      }).join('');
+async function fetchIGData(){
+  const token=ST.igToken;
+  if(!token)return;
+  try{
+    // Auto-refresh se token vence em < 7 dias
+    if(ST.igTokenExpiry){
+      const daysLeft=(ST.igTokenExpiry-Date.now())/86400000;
+      if(daysLeft<7&&daysLeft>0){
+        try{
+          const rr=await fetch(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${token}`);
+          const rd=await rr.json();
+          if(rd.access_token){ST.igToken=rd.access_token;ST.igTokenExpiry=Date.now()+(rd.expires_in*1000);save();showToast('🔑','Token renovado automaticamente');}
+        }catch(e){}
+      }
     }
-  } catch(e){ showToast('⚠️','Erro ao buscar dados do Instagram'); }
+    // Busca perfil
+    const r=await fetch(`https://graph.instagram.com/me?fields=id,username,name,biography,followers_count,media_count,profile_picture_url&access_token=${ST.igToken}`);
+    const data=await r.json();
+    if(data.error){
+      showToast('⚠️','Token inválido: '+data.error.message);
+      ST.igToken='';ST.igProfile=null;ST.igMedia=null;save();renderIG();return;
+    }
+    ST.igProfile=data;
+    // Busca posts recentes
+    const mr=await fetch(`https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=9&access_token=${ST.igToken}`);
+    const mdata=await mr.json();
+    ST.igMedia=mdata.data||[];
+    ST.igLastFetch=Date.now();
+    save();
+    renderIG();
+    showToast('✅',`@${data.username} — ${(data.followers_count||0).toLocaleString('pt-BR')} seguidores`);
+  }catch(e){showToast('⚠️','Erro ao buscar dados do Instagram');}
 }
 
 function renderIGConnect(){
-  const token = ST.igToken || '';
+  const token=ST.igToken||'';
+  const expiry=ST.igTokenExpiry?new Date(ST.igTokenExpiry).toLocaleDateString('pt-BR'):null;
+  const daysLeft=ST.igTokenExpiry?Math.round((ST.igTokenExpiry-Date.now())/86400000):null;
+  const profile=ST.igProfile;
+  const expiryColor=daysLeft!==null?(daysLeft<7?'var(--red)':daysLeft<15?'var(--amber)':'var(--green)'):'var(--t3)';
   return `
     <div class="block" style="margin-bottom:16px;border:1px solid ${token?'var(--green-l)':'var(--amber-l)'};background:${token?'rgba(77,170,107,.06)':'rgba(207,159,83,.06)'};">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${token?'0':'12px'};">
-        <span style="font-size:20px;">${token?'✅':'🔗'}</span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${token?'4':'14'}px;">
+        <span style="font-size:22px;">${token?'✅':'📱'}</span>
         <div style="flex:1;">
-          <div style="font-size:13px;font-weight:600;">${token?'Instagram conectado':'Conectar Instagram'}</div>
-          <div style="font-size:11px;color:var(--t3);">${token?'Usando dados reais da sua conta':'Cole seu Access Token do Instagram Graph API'}</div>
+          <div style="font-size:13px;font-weight:600;">${token?(profile?`@${profile.username} — ${(profile.followers_count||0).toLocaleString('pt-BR')} seguidores`:'Instagram conectado'):'Conectar Instagram via API oficial'}</div>
+          <div style="font-size:11px;color:var(--t3);">${token?(expiry?`<span style="color:${expiryColor};">Token expira: ${expiry} (${daysLeft} dias)</span>`:'Token ativo'):'Instagram Graph API — dados reais e automáticos'}</div>
         </div>
-        ${token?`<button class="btn btn-ghost" style="font-size:11px;color:var(--red);" onclick="G.igDisconnect()">Desconectar</button>`:''}
+        ${token?`
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="fetchIGData()">🔄</button>
+          <button class="btn btn-ghost" style="font-size:11px;color:var(--red);" onclick="G.igDisconnect()">Desconectar</button>`:''}
       </div>
       ${!token?`
-      <div style="display:flex;gap:8px;">
-        <input type="password" id="ig-token-input" placeholder="Cole aqui seu Instagram Access Token..." style="flex:1;font-size:12px;">
-        <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;" onclick="G.igConnect()">Conectar</button>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="password" id="ig-token-input" placeholder="Cole seu Long-Lived Access Token aqui..." style="flex:1;font-size:12px;">
+        <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;" onclick="G.igConnect()">🔗 Conectar</button>
       </div>
-      <div style="margin-top:8px;font-size:11px;color:var(--t3);line-height:1.6;">
-        📖 Para obter seu token: <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--amber);">Meta Graph API Explorer</a> → selecione sua conta → permissões: <code style="background:var(--bg-hh);padding:1px 5px;border-radius:3px;">instagram_basic, instagram_manage_insights</code>
+      <div style="background:var(--bg-c);border-radius:8px;padding:12px;font-size:11px;color:var(--t3);line-height:2;">
+        <b style="color:var(--t2);font-size:12px;">Como obter seu token (5 min):</b><br>
+        <b style="color:var(--t);">1.</b> Acesse <a href="https://developers.facebook.com" target="_blank" style="color:var(--amber);">developers.facebook.com</a> → <b>Meus Apps → Criar App</b><br>
+        <b style="color:var(--t);">2.</b> Tipo: <b>Outros</b> → adicione o produto <b>Instagram API with Instagram Login</b><br>
+        <b style="color:var(--t);">3.</b> Vá em <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--amber);">Graph API Explorer</a> → selecione seu app<br>
+        <b style="color:var(--t);">4.</b> Clique <b>Gerar token</b> → marque <code style="background:var(--bg-hh);padding:1px 6px;border-radius:3px;">instagram_basic</code><br>
+        <b style="color:var(--t);">5.</b> No Explorer clique em <b>ℹ️ Info do token → Gerar Long-Lived Token</b> (válido 60 dias)<br>
+        <b style="color:var(--t);">6.</b> Cole o token acima e clique Conectar ✓<br>
+        <span style="color:var(--blue);font-size:10px;">⚠️ Sua conta deve ser Profissional (Creator ou Business) para ter acesso à API</span>
       </div>`:''}
     </div>`;
 }
