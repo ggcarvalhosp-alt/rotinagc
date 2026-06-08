@@ -237,7 +237,23 @@ select option{background:var(--bg-s);}
 /* ─ HABIT ROW ─────────────────────────── */
 .habit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r);margin-bottom:2px;transition:background .1s;}
 .habit-row:hover{background:var(--bg-h);}
+.habit-row .row-actions{opacity:1;}
 .habit-row.done-h .habit-title{text-decoration:line-through;color:var(--t3);}
+/* EDITORIAL STAGES */
+.st-ideia{background:rgba(255,255,255,.06);color:var(--t2);}
+.st-roteirizado{background:var(--amber-l);color:var(--amber);}
+.st-criado{background:var(--blue-l);color:var(--blue);}
+.st-postado{background:var(--green-l);color:var(--green);}
+/* POST MODAL */
+.post-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.post-modal-overlay.open{display:flex;}
+.post-modal{background:var(--bg-s);border:1px solid var(--b2);border-radius:16px;width:600px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);}
+.post-modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;}
+.post-modal-body{padding:20px 24px 24px;}
+/* CONTACT PHOTO */
+.char-av img,.ndp-av img{width:100%;height:100%;object-fit:cover;border-radius:inherit;}
+.photo-upload-btn{background:var(--bg-hh);border:1px dashed var(--b2);border-radius:var(--r);padding:6px 12px;font-size:11px;color:var(--t2);cursor:pointer;text-align:center;transition:all .12s;}
+.photo-upload-btn:hover{border-color:var(--blue);color:var(--blue);}
 .habit-time{font-size:11px;color:var(--t3);font-weight:500;min-width:38px;font-variant-numeric:tabular-nums;}
 .habit-title{flex:1;font-size:13px;}
 .habit-streak{font-size:11px;color:#f97316;font-weight:600;}
@@ -435,6 +451,37 @@ input[type=range]:focus{border:none;outline:none;}
 
 <!-- MODAL -->
 <div id="modal"><div class="modal-pnl" id="modal-pnl"><div class="modal-h"><span id="modal-title">—</span><button class="del" onclick="G.closeModal()">✕</button></div><div id="modal-body"></div></div></div>
+
+<!-- POST MODAL (editorial detail popup) -->
+<div class="post-modal-overlay" id="post-modal">
+  <div class="post-modal">
+    <div class="post-modal-header">
+      <div>
+        <div style="font-size:11px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Post</div>
+        <div style="font-size:17px;font-weight:700;" id="pm-title">—</div>
+      </div>
+      <button class="del" style="font-size:18px;" onclick="G.closePostModal()">✕</button>
+    </div>
+    <div class="post-modal-body" id="pm-body"></div>
+  </div>
+</div>
+
+<!-- HABIT EDIT MODAL -->
+<div id="habit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:250;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:var(--bg-s);border:1px solid var(--b2);border-radius:12px;width:380px;padding:22px;box-shadow:0 16px 60px rgba(0,0,0,.4);">
+    <div style="font-size:15px;font-weight:600;margin-bottom:16px;">✏️ Editar Hábito</div>
+    <input type="hidden" id="he-id">
+    <div class="fr" style="margin-bottom:12px;">
+      <div style="flex:none;width:70px;"><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Ícone</label><select id="he-icon"><option>📖</option><option>🏃</option><option>💪</option><option>🧘</option><option>💧</option><option>🍎</option><option>📝</option><option>🌟</option><option>☕</option><option>🎯</option><option>🏋️</option><option>🎨</option></select></div>
+      <div style="flex:none;width:90px;"><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Horário</label><input type="time" id="he-time"></div>
+      <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Nome do hábito</label><input type="text" id="he-title" placeholder="Nome..."></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="G.closeHabitModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="G.saveHabit()">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- SIDEBAR -->
 <nav class="sb">
@@ -638,17 +685,40 @@ input[type=range]:focus{border:none;outline:none;}
 
     <!-- ══ INSTAGRAM ══════════════════════════════ -->
     <div class="page" id="page-ig">
-      <div class="page-title">Instagram</div>
-      <div class="page-subtitle">Métricas e performance do perfil</div>
-      <div id="ig-connect" style="margin-bottom:16px;"></div>
+      <div style="display:flex;align-items:center;margin-bottom:4px;">
+        <div><div class="page-title">Instagram</div><div class="page-subtitle">Atualize suas métricas semanalmente para acompanhar o crescimento</div></div>
+        <button class="btn btn-primary" style="margin-left:auto;" onclick="G.toggle('ig-update-form')">📊 Atualizar métricas</button>
+      </div>
+
+      <!-- Formulário de atualização -->
+      <div class="fp" id="ig-update-form" style="margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px;">Insira os dados do seu Instagram (veja no app → Insights)</div>
+        <div class="fr">
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Seguidores</label><input type="number" id="ig-f-followers" placeholder="ex: 8420"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Alcance semanal</label><input type="number" id="ig-f-reach" placeholder="ex: 12500"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Impressões</label><input type="number" id="ig-f-impressions" placeholder="ex: 45000"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Visitas ao perfil</label><input type="number" id="ig-f-visits" placeholder="ex: 2340"></div>
+        </div>
+        <div class="fr">
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Eng. Feed (%)</label><input type="number" step="0.1" id="ig-f-feed" placeholder="ex: 3.2"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Eng. Reels (%)</label><input type="number" step="0.1" id="ig-f-reels" placeholder="ex: 7.8"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Eng. Stories (%)</label><input type="number" step="0.1" id="ig-f-stories" placeholder="ex: 1.9"></div>
+          <div><label style="font-size:10px;color:var(--t3);display:block;margin-bottom:3px;">Novos seguidores</label><input type="number" id="ig-f-new" placeholder="ex: 127"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+          <button class="btn btn-ghost" onclick="G.toggle('ig-update-form')">Cancelar</button>
+          <button class="btn btn-primary" onclick="G.saveIGMetrics()">Salvar registro</button>
+        </div>
+      </div>
+
       <div class="g4" style="margin-bottom:20px;" id="ig-kpis"></div>
       <div class="g2" style="margin-bottom:12px;">
-        <div class="block" style="margin-bottom:0;"><div class="block-title">Crescimento — 30 dias</div><canvas id="chart-ig" height="150"></canvas></div>
-        <div class="block" style="margin-bottom:0;"><div class="block-title">Engajamento por tipo</div><canvas id="chart-ig-eng" height="150"></canvas></div>
+        <div class="block" style="margin-bottom:0;"><div class="block-title">📈 Crescimento de seguidores</div><canvas id="chart-ig" height="150"></canvas></div>
+        <div class="block" style="margin-bottom:0;"><div class="block-title">📊 Engajamento por tipo</div><canvas id="chart-ig-eng" height="150"></canvas></div>
       </div>
       <div class="g2">
-        <div class="block" style="margin-bottom:0;"><div class="block-title">Top Posts</div><div id="ig-posts"></div></div>
-        <div class="block" style="margin-bottom:0;"><div class="block-title">Sugestões</div><div id="ig-tips"></div></div>
+        <div class="block" style="margin-bottom:0;"><div class="block-title">📅 Histórico de registros</div><div id="ig-history"></div></div>
+        <div class="block" style="margin-bottom:0;"><div class="block-title">💡 Sugestões de melhoria</div><div id="ig-tips"></div></div>
       </div>
     </div>
 
@@ -681,7 +751,7 @@ input[type=range]:focus{border:none;outline:none;}
             <div class="fp" id="edf">
               <div class="fr"><input type="date" id="edf-d"><select id="edf-type"><option value="story">Story</option><option value="feed">Feed</option><option value="reel">Reels</option></select></div>
               <input type="text" id="edf-theme" placeholder="Tema do post..." style="margin-bottom:8px;">
-              <select id="edf-status" style="margin-bottom:8px;"><option value="idea">💭 Ideia</option><option value="production">🎬 Produção</option><option value="ready">✅ Pronto</option><option value="published">📤 Publicado</option></select>
+              <select id="edf-status" style="margin-bottom:8px;"><option value="ideia">💭 Ideia</option><option value="roteirizado">📝 Roteirizado</option><option value="criado">🎬 Criado</option><option value="postado">📤 Postado</option></select>
               <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-ghost" onclick="G.toggle('edf')">Cancelar</button><button class="btn btn-primary" onclick="G.addPost()">Adicionar</button></div>
             </div>
           </div>
@@ -944,6 +1014,101 @@ const G={
     save();renderRotina();
   },
   delHabit(id){ST.habits=ST.habits.filter(h=>h.id!==id);save();renderRotina();},
+  editHabit(id){
+    const h=ST.habits.find(x=>x.id===id);if(!h)return;
+    document.getElementById('he-id').value=id;
+    document.getElementById('he-icon').value=h.icon;
+    document.getElementById('he-time').value=h.time;
+    document.getElementById('he-title').value=h.title;
+    document.getElementById('habit-modal').style.display='flex';
+  },
+  saveHabit(){
+    const id=document.getElementById('he-id').value;
+    const h=ST.habits.find(x=>x.id===id);if(!h)return;
+    h.icon=document.getElementById('he-icon').value;
+    h.time=document.getElementById('he-time').value;
+    h.title=document.getElementById('he-title').value.trim()||h.title;
+    save();G.closeHabitModal();renderRotina();showToast('✓','Hábito atualizado');
+  },
+  closeHabitModal(){document.getElementById('habit-modal').style.display='none';},
+  openPostModal(id){
+    const p=ST.posts.find(x=>x.id===id);if(!p)return;
+    const stLbl={ideia:'💭 Ideia',roteirizado:'📝 Roteirizado',criado:'🎬 Criado',postado:'📤 Postado'};
+    const typeLabel={story:'Story 🟣',feed:'Feed 🔵',reel:'Reels 🟠'};
+    document.getElementById('pm-title').textContent=p.theme;
+    document.getElementById('pm-body').innerHTML=`
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+        <span class="prop prop-${p.type==='story'?'purple':p.type==='feed'?'blue':'orange'}">${typeLabel[p.type]||p.type}</span>
+        <span class="prop st-${p.status||'ideia'}">${stLbl[p.status]||p.status}</span>
+        <span style="font-size:11px;color:var(--t3);">📅 ${fmtDate(p.date)}</span>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="G.advancePost('${p.id}');G.openPostModal('${p.id}')">→ Avançar status</button>
+          ${p.status!=='postado'?`<button class="btn btn-primary" style="font-size:12px;" onclick="G.checkPostado('${p.id}')">✓ Marcar como Postado</button>`:'<span class="prop prop-green">✓ Postado</span>'}
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--b);padding-top:16px;margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:8px;">📝 Roteiro & Direcionamento</div>
+        <textarea id="pm-notes-${p.id}" placeholder="Escreva o roteiro, pontos principais, tom de voz, call-to-action..." style="width:100%;background:var(--bg-i);border:1px solid var(--b);border-radius:var(--r);color:var(--t);font-size:13px;font-family:Inter,sans-serif;padding:10px;resize:vertical;min-height:120px;line-height:1.7;" onchange="G.savePostNotes('${p.id}',this.value)">${p.notes||''}</textarea>
+      </div>
+      <div style="border-top:1px solid var(--b);padding-top:16px;">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:8px;">🔗 Referências</div>
+        ${(p.refs||[]).map((r,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;"><a href="${r.url}" target="_blank" style="flex:1;font-size:12px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.url}">${r.label||r.url}</a><button class="del" onclick="G.delPostRef('${p.id}',${i});G.openPostModal('${p.id}')">✕</button></div>`).join('')}
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <input type="text" id="pmr-label-${p.id}" placeholder="Título..." style="flex:1;font-size:12px;">
+          <input type="url" id="pmr-url-${p.id}" placeholder="https://..." style="flex:2;font-size:12px;">
+          <button class="btn btn-ghost" style="font-size:11px;white-space:nowrap;" onclick="G.addPostRefModal('${p.id}')">+ Ref</button>
+        </div>
+      </div>`;
+    document.getElementById('post-modal').classList.add('open');
+  },
+  closePostModal(){document.getElementById('post-modal').classList.remove('open');renderEditorial();},
+  checkPostado(id){
+    const p=ST.posts.find(x=>x.id===id);if(!p)return;
+    p.status='postado';gainXP(200,'📤','Postado!');save();G.openPostModal(id);renderEditorial();
+  },
+  addPostRefModal(id){
+    const label=document.getElementById('pmr-label-'+id)?.value?.trim();
+    const url=document.getElementById('pmr-url-'+id)?.value?.trim();
+    if(!url)return;
+    const p=ST.posts.find(x=>x.id===id);if(!p)return;
+    if(!p.refs)p.refs=[];
+    p.refs.push({label:label||url,url});
+    save();G.openPostModal(id);
+  },
+  saveIGMetrics(){
+    const get=id=>parseFloat(document.getElementById(id)?.value)||0;
+    const entry={
+      date:d0(),
+      followers:get('ig-f-followers'),reach:get('ig-f-reach'),
+      impressions:get('ig-f-impressions'),visits:get('ig-f-visits'),
+      feedEng:get('ig-f-feed'),reelsEng:get('ig-f-reels'),storiesEng:get('ig-f-stories'),
+      newFollowers:get('ig-f-new'),
+    };
+    if(!entry.followers){showToast('⚠️','Preencha ao menos o número de seguidores');return;}
+    if(!ST.igMetrics)ST.igMetrics=[];
+    // replace today's entry if exists
+    const todayIdx=ST.igMetrics.findIndex(m=>m.date===d0());
+    if(todayIdx>=0)ST.igMetrics[todayIdx]=entry;else ST.igMetrics.push(entry);
+    save();G.toggle('ig-update-form');gainXP(50,'📊','Métricas atualizadas');renderIG();
+  },
+  addContactPhoto(id){
+    const input=document.createElement('input');input.type='file';input.accept='image/*';
+    input.onchange=e=>{
+      const file=e.target.files[0];if(!file)return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const img=new Image();img.onload=()=>{
+          const canvas=document.createElement('canvas');
+          const size=80;canvas.width=size;canvas.height=size;
+          const ctx=canvas.getContext('2d');
+          const min=Math.min(img.width,img.height);
+          ctx.drawImage(img,(img.width-min)/2,(img.height-min)/2,min,min,0,0,size,size);
+          const c=ST.contacts.find(x=>x.id===id);if(!c)return;
+          c.photo=canvas.toDataURL('image/jpeg',0.7);save();renderNetwork();renderNetDetail(id);
+        };img.src=ev.target.result;
+      };reader.readAsDataURL(file);
+    };input.click();
+  },
   addEvent(){
     const title=document.getElementById('agf-title').value.trim();if(!title)return;
     const date=document.getElementById('agf-d').value||ST.agSelDate||d0();
@@ -971,8 +1136,12 @@ const G={
   },
   advancePost(id){
     const p=ST.posts.find(x=>x.id===id);if(!p)return;
-    const f=['idea','production','ready','published'];const i=f.indexOf(p.status);
-    if(i<f.length-1)p.status=f[i+1];if(p.status==='published')gainXP(200,'📤','Publicado!');
+    const f=['ideia','roteirizado','criado','postado'];
+    // migrate old statuses
+    const legacyMap={idea:'ideia',production:'roteirizado',ready:'criado',published:'postado'};
+    if(legacyMap[p.status])p.status=legacyMap[p.status];
+    const i=f.indexOf(p.status);
+    if(i<f.length-1)p.status=f[i+1];if(p.status==='postado')gainXP(200,'📤','Postado!');
     save();renderEditorial();
   },
   delPost(id){ST.posts=ST.posts.filter(p=>p.id!==id);save();renderEditorial();},
@@ -1207,7 +1376,10 @@ function renderRotina(){
       <span class="habit-time">${h.time}</span>
       <span class="habit-title">${h.title}</span>
       <span class="habit-streak">${h.streak>0?'🔥'+h.streak:''}</span>
-      <div class="row-actions"><button class="del" onclick="G.delHabit('${h.id}')">✕</button></div>
+      <div class="row-actions" style="display:flex;gap:4px;">
+        <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="G.editHabit('${h.id}')">✏️</button>
+        <button class="del" onclick="G.delHabit('${h.id}')">✕</button>
+      </div>
     </div>`).join('')||'<div class="empty">Nenhum hábito cadastrado</div>';
 
   document.getElementById('rotina-stats').innerHTML=`
@@ -1392,7 +1564,7 @@ function renderEditorial(){
   for(let day=1;day<=dIM;day++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const dayP=ST.posts.filter(p=>p.date===ds);
-    const dots=dayP.map(p=>`<div class="ed-post ${p.type==='story'?'ep-s':p.type==='feed'?'ep-f':'ep-r'}">${p.type==='story'?'Story':p.type==='feed'?'Feed':'Reels'}</div>`).join('');
+    const dots=dayP.map(p=>`<div class="ed-post ${p.type==='story'?'ep-s':p.type==='feed'?'ep-f':'ep-r'}" onclick="event.stopPropagation();G.openPostModal('${p.id}')" style="cursor:pointer;">${p.type==='story'?'Story':p.type==='feed'?'Feed':'Reels'}</div>`).join('');
     html+=`<div class="ed-cell${ds===today?' today':''}${ds===sel?' sel':''}" onclick="G.edSelectDay('${ds}')"><div class="ed-num">${day}</div>${dots}</div>`;
   }
   const rem=(7-(first+dIM)%7)%7;for(let i=1;i<=rem;i++)html+=`<div class="ed-cell om"><div class="ed-num">${i}</div></div>`;
@@ -1438,7 +1610,7 @@ function renderNetwork(){
     contacts.map(c=>`
       <div class="char-card${ST.netSelectedId===c.id?' sel':''}" onclick="G.selectContact('${c.id}')">
         <div class="char-status-dot dot ${dotCls[c.status]||'dot-gray'}" style="border-color:${ST.netSelectedId===c.id?'var(--blue-l)':'var(--bg-c)'};"></div>
-        <div class="char-av">${c.avatar}</div>
+        <div class="char-av">${c.photo?`<img src="${c.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`:c.avatar}</div>
         <div class="char-name">${c.name}</div>
         <div class="char-cat">${c.cat}${c.social?' · '+c.social:''}</div>
         <span class="prop prop-${c.status==='hot'?'red':c.status==='warm'?'amber':'blue'}" style="font-size:10px;">${c.status==='hot'?'Quente':c.status==='warm'?'Morno':'Frio'}</span>
@@ -1471,7 +1643,8 @@ function renderNetDetail(cid){
         <button class="btn btn-ghost" style="font-size:11px;" onclick="G.delContact('${c.id}')">Remover</button>
         <button class="del" onclick="G.selectContact('${c.id}')">✕</button>
       </div>
-      <div class="ndp-av">${c.avatar}</div>
+      <div class="ndp-av" style="cursor:pointer;" onclick="G.addContactPhoto('${c.id}')" title="Clique para alterar foto">${c.photo?`<img src="${c.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`:c.avatar}</div>
+      <div style="font-size:10px;color:var(--t3);margin-bottom:8px;cursor:pointer;" onclick="G.addContactPhoto('${c.id}')">📷 Alterar foto</div>
       <div class="ndp-name">${c.name}</div>
       <div class="ndp-meta">
         <span class="prop ${stCls[c.status]||'prop-gray'}" style="font-size:11px;margin-right:4px;">${stLbl[c.status]||c.status}</span>
@@ -1875,8 +2048,11 @@ function renderIGConnect(){
 // ══════════════════════════════════════════════════════════════
 function renderPostDetail(p){
   if(!p) return '<div class="empty">Sem posts neste dia</div>';
-  const stM={idea:{lbl:'Ideia',cls:'s-bk'},production:{lbl:'Produção',cls:'s-do'},ready:{lbl:'Pronto',cls:'s-rv'},published:{lbl:'Publicado',cls:'s-dn'}};
-  const st=stM[p.status]||{lbl:p.status,cls:'s-bk'};
+  const stM={ideia:{lbl:'💭 Ideia',cls:'st-ideia'},roteirizado:{lbl:'📝 Roteirizado',cls:'st-roteirizado'},criado:{lbl:'🎬 Criado',cls:'st-criado'},postado:{lbl:'📤 Postado',cls:'st-postado'}};
+  // migrate legacy statuses
+  const legMap={idea:'ideia',production:'roteirizado',ready:'criado',published:'postado'};
+  if(legMap[p.status])p.status=legMap[p.status];
+  const st=stM[p.status]||{lbl:p.status,cls:'st-ideia'};
   return `
     <div style="padding:12px;background:var(--bg-i);border:1px solid var(--b);border-radius:var(--r2);margin-bottom:8px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -1885,7 +2061,7 @@ function renderPostDetail(p){
           <div style="font-size:13px;font-weight:600;">${p.theme}</div>
           <div style="display:flex;gap:6px;margin-top:3px;"><span class="prop ${st.cls}" style="font-size:10px;">${st.lbl}</span></div>
         </div>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="G.advancePost('${p.id}')">→ Avançar</button>
+        ${p.status!=='postado'?`<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="G.advancePost('${p.id}')">→ Avançar</button><button class="btn btn-primary" style="font-size:11px;padding:3px 8px;" onclick="G.checkPostado('${p.id}')">✓ Postado</button>`:'<span class="prop st-postado" style="font-size:10px;">✓ Postado</span>'}
         <button class="del" onclick="G.delPost('${p.id}')">✕</button>
       </div>
       <div style="border-top:1px solid var(--b);padding-top:10px;">
