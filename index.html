@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GC Gestora</title>
+<title>Jornada GC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -321,6 +321,25 @@ input[type=range]:focus{border:none;outline:none;}
 /* ─ EMPTY STATE ─────────────────────── */
 .empty{color:var(--t3);font-size:13px;text-align:center;padding:24px 16px;}
 
+/* ─ QUOTE DO DIA ─────────────────────── */
+.quote-block{display:flex;align-items:flex-start;gap:14px;padding:16px 20px;background:var(--bg-c);border:1px solid var(--b);border-left:3px solid var(--amber);border-radius:var(--r2);}
+.quote-icon{font-size:20px;flex-shrink:0;opacity:.5;margin-top:2px;}
+.quote-body{flex:1;}
+.quote-text{font-size:15px;line-height:1.7;color:var(--t);font-style:italic;margin-bottom:6px;}
+.quote-author{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.04em;}
+
+/* ─ NEWS FEED ─────────────────────────── */
+.news-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;}
+.news-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--b);cursor:pointer;transition:all .1s;text-decoration:none;}
+.news-item:last-child{border-bottom:none;}
+.news-item:hover{background:var(--bg-h);margin:0 -10px;padding:10px;border-radius:var(--r);}
+.news-thumb{width:60px;height:44px;border-radius:var(--r);object-fit:cover;flex-shrink:0;background:var(--bg-hh);}
+.news-ph{width:60px;height:44px;border-radius:var(--r);flex-shrink:0;background:var(--bg-hh);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.news-body{flex:1;min-width:0;}
+.news-title{font-size:12px;font-weight:600;line-height:1.4;color:var(--t);margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.news-meta{font-size:10px;color:var(--t3);display:flex;gap:6px;}
+.news-src{font-weight:600;color:var(--amber);}
+
 /* ─ CHARACTER SELECTION (Network) ─────── */
 .net-layout{display:flex;gap:16px;align-items:flex-start;}
 .net-roster{flex:1;min-width:0;}
@@ -421,7 +440,7 @@ input[type=range]:focus{border:none;outline:none;}
 <nav class="sb">
   <div class="sb-workspace">
     <div class="sb-ws-icon">G</div>
-    <span class="sb-ws-name">GBRAND</span>
+    <span class="sb-ws-name">Jornada GC</span>
     <span class="sb-ws-arrow">⌄</span>
   </div>
 
@@ -464,7 +483,7 @@ input[type=range]:focus{border:none;outline:none;}
 <div class="main">
   <div class="topbar">
     <div class="tb-breadcrumb">
-      <span>GC Gestora</span>
+      <span>Jornada GC</span>
       <span class="sep">/</span>
       <span class="tb-title" id="tb-title">Dashboard</span>
     </div>
@@ -479,7 +498,10 @@ input[type=range]:focus{border:none;outline:none;}
       <div class="page-title" id="dash-greeting">Bom dia, Gustavo</div>
       <div class="page-subtitle" id="dash-sub">Aqui está o resumo do seu dia</div>
 
-      <div class="tabs">
+      <!-- Frase do Dia -->
+      <div id="dash-quote"></div>
+
+      <div class="tabs" style="margin-top:16px;">
         <div class="tab on" onclick="G.dashTab('hoje',this)">Hoje</div>
         <div class="tab" onclick="G.dashTab('semana',this)">Esta semana</div>
         <div class="tab" onclick="G.dashTab('mes',this)">Este mês</div>
@@ -509,6 +531,15 @@ input[type=range]:focus{border:none;outline:none;}
       <div class="block">
         <div class="block-title">🎯 Metas em andamento</div>
         <div id="dash-goals"></div>
+      </div>
+
+      <!-- News -->
+      <div class="block" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div class="block-title" style="margin-bottom:0;">📰 Notícias — Marketing & Gestão</div>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="loadNews(true)">↻ Atualizar</button>
+        </div>
+        <div id="dash-news"><div class="empty">Carregando notícias...</div></div>
       </div>
     </div>
 
@@ -1091,6 +1122,7 @@ function renderDash(){
   const hr=new Date().getHours();
   const greet=hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
   const el=document.getElementById('dash-greeting');if(el)el.textContent=greet+', Gustavo';
+  renderQuote();
 
   document.getElementById('dash-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-v">${doneT.length}/${todayT.length}</div><div class="kpi-l">Tarefas concluídas hoje</div><div class="kpi-d ${doneT.length===todayT.length&&todayT.length>0?'up':''}">${doneT.length*100} XP conquistados</div></div>
@@ -1594,7 +1626,159 @@ setTimeout(()=>{
   const agfD=document.getElementById('agf-d');if(agfD)agfD.value=d0();
   const edfD=document.getElementById('edf-d');if(edfD)edfD.value=d0();
 },0);
-renderSidebar();renderDash();
+renderSidebar();renderDash();loadNews();
+
+// ══════════════════════════════════════════════════════════════
+//  FRASE DO DIA
+// ══════════════════════════════════════════════════════════════
+const QUOTES = [
+  {text:"O sucesso é a soma de pequenos esforços repetidos dia após dia.",author:"Robert Collier"},
+  {text:"Não é a montanha que conquistamos, mas a nós mesmos.",author:"Edmund Hillary"},
+  {text:"A disciplina é a ponte entre metas e realizações.",author:"Jim Rohn"},
+  {text:"Você não precisa ser ótimo para começar, mas precisa começar para ser ótimo.",author:"Zig Ziglar"},
+  {text:"A melhor hora de plantar uma árvore foi há 20 anos. A segunda melhor hora é agora.",author:"Provérbio Chinês"},
+  {text:"Grandes resultados requerem grandes ambições.",author:"Heráclito"},
+  {text:"O único lugar onde o sucesso vem antes do trabalho é no dicionário.",author:"Vidal Sassoon"},
+  {text:"Trate cada dia como uma página em branco da sua história.",author:"Og Mandino"},
+  {text:"Sua atitude, não sua aptidão, determina sua altitude.",author:"Zig Ziglar"},
+  {text:"O segredo do seu futuro está escondido em sua rotina diária.",author:"Mike Murdock"},
+  {text:"Não espere por condições ideais. Comece onde você está, use o que tem e faça o que pode.",author:"Arthur Ashe"},
+  {text:"Cada dia é uma nova chance de mudar sua vida.",author:"Anônimo"},
+  {text:"O sucesso não é definitivo, o fracasso não é fatal: é a coragem de continuar que conta.",author:"Winston Churchill"},
+  {text:"Acredite que você pode e você já está no meio do caminho.",author:"Theodore Roosevelt"},
+  {text:"Faça hoje o que outros não farão, para ter amanhã o que outros não terão.",author:"Jerry Rice"},
+  {text:"O único modo de fazer um ótimo trabalho é amar o que você faz.",author:"Steve Jobs"},
+  {text:"A persistência é o caminho do êxito.",author:"Charles Chaplin"},
+  {text:"Sonhos não funcionam a menos que você trabalhe.",author:"John C. Maxwell"},
+  {text:"Lembre-se de que a forma como você passa seus dias é a forma como passa sua vida.",author:"Annie Dillard"},
+  {text:"O poder de escolher está sempre em suas mãos. Escolha crescer.",author:"Anônimo"},
+  {text:"Não há limite para o que o ser humano pode realizar se não se importar com quem recebe o crédito.",author:"Ronald Reagan"},
+  {text:"Uma hora de planejamento pode poupar dez horas de trabalho.",author:"Dale Carnegie"},
+  {text:"Movimentos pequenos e consistentes constroem impérios.",author:"Anônimo"},
+  {text:"A excelência não é uma ação, mas um hábito.",author:"Aristóteles"},
+  {text:"O que você faz com o que tem é mais importante do que o que você tem.",author:"Zig Ziglar"},
+  {text:"Sem foco, você não pode master qualquer coisa. Com foco, você pode master qualquer coisa.",author:"Alibek Dzhaksybekov"},
+  {text:"Empreender é aceitar ser desconfortável por um tempo para que outros sejam confortáveis para sempre.",author:"Anônimo"},
+  {text:"Não é o quanto você sabe, mas como aplica o que sabe.",author:"Kenneth Blanchard"},
+  {text:"A jornada de mil milhas começa com um único passo.",author:"Lao Tzu"},
+  {text:"Quem tem um porquê para viver suporta quase qualquer como.",author:"Nietzsche"},
+  {text:"Criatividade é inteligência se divertindo.",author:"Albert Einstein"},
+  {text:"Fazer simples é mais difícil do que fazer complicado.",author:"Steve Jobs"},
+  {text:"Marketing é contar a história do seu produto de uma forma que conecta.",author:"Seth Godin"},
+  {text:"Liderar é criar um ambiente onde as pessoas encontram razão para dar o melhor de si.",author:"Anônimo"},
+  {text:"Consistência bate talento quando o talento não é consistente.",author:"Anônimo"},
+  {text:"Planeje seu trabalho e trabalhe seu plano.",author:"Napoleon Hill"},
+  {text:"O maior risco é não correr nenhum risco.",author:"Mark Zuckerberg"},
+  {text:"Comece antes de estar pronto.",author:"Marie Forleo"},
+  {text:"Você é a média das cinco pessoas com quem passa mais tempo.",author:"Jim Rohn"},
+  {text:"Toda ação grande nasce de uma pequena ideia que foi executada com determinação.",author:"Anônimo"},
+  {text:"O cliente não compra um produto, compra a transformação que ele proporciona.",author:"Anônimo"},
+  {text:"Marcas não são construídas com anúncios, mas com experiências.",author:"Anônimo"},
+  {text:"Um negócio que não cria nada além de dinheiro é um negócio pobre.",author:"Henry Ford"},
+  {text:"Não recite o que é conhecido, mas pergunte o que é possível.",author:"Peter Drucker"},
+  {text:"A inovação distingue entre um líder e um seguidor.",author:"Steve Jobs"},
+  {text:"Quanto mais você sudar no treino, menos você sangrará na batalha.",author:"Sun Tzu"},
+  {text:"A vida acontece uma única vez. Faça-a valer a pena.",author:"Anônimo"},
+  {text:"Sucesso é fazer o que você ama e amar o que você faz.",author:"Ray Bradbury"},
+  {text:"Todo expert já foi um iniciante.",author:"Helen Hayes"},
+  {text:"O ambiente que você escolhe determina a pessoa que você se torna.",author:"Anônimo"},
+  {text:"Foque no progresso, não na perfeição.",author:"Bill Phillips"},
+];
+
+function getDailyQuote(){
+  const day = Math.floor(Date.now() / 86400000);
+  return QUOTES[day % QUOTES.length];
+}
+
+function renderQuote(){
+  const q = getDailyQuote();
+  const el = document.getElementById('dash-quote');
+  if(!el) return;
+  el.innerHTML = `<div class="quote-block">
+    <div class="quote-icon">❝</div>
+    <div class="quote-body">
+      <div class="quote-text">${q.text}</div>
+      <div class="quote-author">— ${q.author}</div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NEWS FEED
+// ══════════════════════════════════════════════════════════════
+const NEWS_FEEDS = [
+  {url:'https://mundodomarketing.com.br/feed/',name:'Mundo do Marketing',icon:'📢'},
+  {url:'https://marketingdeconteudo.com/feed/',name:'Marketing de Conteúdo',icon:'✍️'},
+  {url:'https://www.ecommercebrasil.com.br/feed/',name:'E-commerce Brasil',icon:'🛒'},
+  {url:'https://exame.com/rss/',name:'Exame',icon:'📊'},
+];
+const RSS2JSON = 'https://api.rss2json.com/v1/api.json?num=5&rss_url=';
+let _newsCache = null, _newsCacheTime = 0;
+
+function timeAgo(dateStr){
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if(h < 1) return 'Agora';
+  if(h < 24) return `${h}h atrás`;
+  if(d < 7) return `${d}d atrás`;
+  return new Date(dateStr).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+}
+
+function stripHtml(html){ return html?.replace(/<[^>]*>/g,'').replace(/&[a-z]+;/gi,' ').trim() || ''; }
+
+async function loadNews(force=false){
+  const el = document.getElementById('dash-news');
+  if(!el) return;
+
+  // Cache 30 min
+  if(!force && _newsCache && Date.now() - _newsCacheTime < 1800000){
+    renderNewsEl(el, _newsCache); return;
+  }
+  el.innerHTML = '<div class="news-loading">⏳ Carregando notícias...</div>';
+
+  const allItems = [];
+  await Promise.allSettled(NEWS_FEEDS.map(async feed => {
+    try {
+      const r = await fetch(RSS2JSON + encodeURIComponent(feed.url));
+      const data = await r.json();
+      if(data.status === 'ok' && data.items){
+        data.items.slice(0,4).forEach(item => {
+          allItems.push({
+            title: item.title,
+            link: item.link,
+            date: item.pubDate,
+            thumb: item.thumbnail || item.enclosure?.link || '',
+            source: feed.name,
+            icon: feed.icon,
+          });
+        });
+      }
+    } catch(e){}
+  }));
+
+  if(!allItems.length){
+    el.innerHTML = '<div class="news-error">⚠️ Não foi possível carregar as notícias agora. <a href="https://mundodomarketing.com.br" target="_blank" style="color:var(--amber);">Acessar direto →</a></div>';
+    return;
+  }
+
+  // Sort by date, take top 8
+  allItems.sort((a,b) => new Date(b.date) - new Date(a.date));
+  _newsCache = allItems.slice(0,8);
+  _newsCacheTime = Date.now();
+  renderNewsEl(el, _newsCache);
+}
+
+function renderNewsEl(el, items){
+  el.innerHTML = `<div class="news-grid">${items.map(item => `
+    <a class="news-item" href="${item.link}" target="_blank" rel="noopener">
+      ${item.thumb ? `<img class="news-thumb" src="${item.thumb}" alt="" onerror="this.style.display='none'">` : `<div class="news-ph">${item.icon}</div>`}
+      <div class="news-body">
+        <div class="news-title">${item.title}</div>
+        <div class="news-meta"><span class="news-src">${item.source}</span><span>${timeAgo(item.date)}</span></div>
+      </div>
+    </a>`).join('')}</div>`;
+}
 </script>
 </body>
 </html>
