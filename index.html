@@ -640,6 +640,7 @@ input[type=range]:focus{border:none;outline:none;}
     <div class="page" id="page-ig">
       <div class="page-title">Instagram</div>
       <div class="page-subtitle">Métricas e performance do perfil</div>
+      <div id="ig-connect" style="margin-bottom:16px;"></div>
       <div class="g4" style="margin-bottom:20px;" id="ig-kpis"></div>
       <div class="g2" style="margin-bottom:12px;">
         <div class="block" style="margin-bottom:0;"><div class="block-title">Crescimento — 30 dias</div><canvas id="chart-ig" height="150"></canvas></div>
@@ -832,7 +833,7 @@ const INIT={
 };
 
 let ST=JSON.parse(localStorage.getItem('gcnotion')||'null')||JSON.parse(JSON.stringify(INIT));
-['agY','agM','edY','edM','agSelDate','edSelDate','netSelectedId','blogSelectedId','blogMode'].forEach(k=>{if(ST[k]===undefined)ST[k]=INIT[k];});
+['agY','agM','edY','edM','agSelDate','edSelDate','netSelectedId','blogSelectedId','blogMode','igToken','edSelectedPostId'].forEach(k=>{if(ST[k]===undefined)ST[k]=INIT[k]===undefined?'':INIT[k];});
 if(!ST.blogPosts)ST.blogPosts=INIT.blogPosts;
 ST.contacts.forEach(c=>{if(!c.projects)c.projects=[];if(!c.interactions)c.interactions=[];});
 function save(){localStorage.setItem('gcnotion',JSON.stringify(ST));}
@@ -1010,6 +1011,35 @@ const G={
     m.done=!m.done;if(m.done)gainXP(500,'🏆','Marco!');save();renderMetas();
   },
   delGoal(id){ST.goals=ST.goals.filter(g=>g.id!==id);save();renderMetas();},
+
+  // ─ INSTAGRAM ─
+  igConnect(){
+    const t=document.getElementById('ig-token-input')?.value?.trim();
+    if(!t){showToast('⚠️','Cole um token válido');return;}
+    ST.igToken=t;save();showToast('✅','Instagram conectado!');renderIG();
+  },
+  igDisconnect(){ST.igToken='';save();renderIG();},
+
+  // ─ EDITORIAL NOTES ─
+  savePostNotes(id,val){
+    const p=ST.posts.find(x=>x.id===id);if(!p)return;p.notes=val;save();
+  },
+  addPostRef(id){
+    const label=document.getElementById('pr-label-'+id)?.value?.trim();
+    const url=document.getElementById('pr-url-'+id)?.value?.trim();
+    if(!url)return;
+    const p=ST.posts.find(x=>x.id===id);if(!p)return;
+    if(!p.refs)p.refs=[];
+    p.refs.push({label:label||url,url});
+    document.getElementById('pr-label-'+id).value='';
+    document.getElementById('pr-url-'+id).value='';
+    save();renderEditorial();
+  },
+  delPostRef(id,idx){
+    const p=ST.posts.find(x=>x.id===id);if(!p||!p.refs)return;
+    p.refs.splice(idx,1);save();renderEditorial();
+  },
+  openPostDetail(id){ST.edSelectedPostId=id;save();renderEditorial();},
 
   // ─ NETWORK ─
   selectContact(id){
@@ -1302,6 +1332,21 @@ function renderAgenda(){
 
 // ─ INSTAGRAM ───────────────────────────────────────────────────
 function renderIG(){
+  // Connect block
+  const connectEl=document.getElementById('ig-connect');
+  if(connectEl) connectEl.innerHTML=renderIGConnect();
+
+  // KPIs — real if token, simulated otherwise
+  if(ST.igToken){
+    fetchIGData(ST.igToken);
+  } else {
+    document.getElementById('ig-kpis').innerHTML=`
+      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--t3);">Conecte sua conta</div></div>
+      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Engajamento</div></div>
+      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Alcance mensal</div></div>
+      <div class="kpi"><div class="kpi-v" style="font-size:18px;color:var(--t3);">—</div><div class="kpi-l">Visitas ao perfil</div></div>`;
+  }
+
   document.getElementById('ig-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-v">8.420</div><div class="kpi-l">Seguidores</div><div class="kpi-d up">+127 esta semana</div></div>
     <div class="kpi"><div class="kpi-v">4,8%</div><div class="kpi-l">Engajamento</div><div class="kpi-d up">+0,3% vs semana ant.</div></div>
@@ -1355,17 +1400,10 @@ function renderEditorial(){
 
   const selP=ST.posts.filter(p=>p.date===sel);
   document.getElementById('ed-detail-title').textContent=fmtDate(sel);
-  const stM={idea:{lbl:'Ideia',cls:'s-bk'},production:{lbl:'Produção',cls:'s-do'},ready:{lbl:'Pronto',cls:'s-rv'},published:{lbl:'Publicado',cls:'s-dn'}};
-  document.getElementById('ed-detail').innerHTML=selP.map(p=>{
-    const st=stM[p.status]||{lbl:p.status,cls:'s-bk'};
-    return `<div class="db-row">
-      <span style="font-size:14px;flex-shrink:0;">${p.type==='story'?'🟣':p.type==='feed'?'🔵':'🟠'}</span>
-      <div class="row-body"><div class="row-title">${p.theme}</div><div class="row-props"><span class="prop ${st.cls}">${st.lbl}</span></div></div>
-      <div class="row-actions">
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="G.advancePost('${p.id}')">→</button>
-        <button class="del" onclick="G.delPost('${p.id}')">✕</button>
-      </div>
-    </div>`;}).join('')||'<div class="empty">Sem posts neste dia</div>';
+  // Use renderPostDetail for rich notes UI
+  document.getElementById('ed-detail').innerHTML=selP.length
+    ? selP.map(p=>renderPostDetail(p)).join('')
+    : '<div class="empty">Sem posts neste dia</div>';
 
   const mon=ST.posts.filter(p=>p.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}`));
   const pub=mon.filter(p=>p.status==='published').length;
@@ -1626,7 +1664,7 @@ setTimeout(()=>{
   const agfD=document.getElementById('agf-d');if(agfD)agfD.value=d0();
   const edfD=document.getElementById('edf-d');if(edfD)edfD.value=d0();
 },0);
-renderSidebar();renderDash();loadNews();
+// init moved to end of script — after all const declarations
 
 // ══════════════════════════════════════════════════════════════
 //  FRASE DO DIA
@@ -1779,6 +1817,101 @@ function renderNewsEl(el, items){
       </div>
     </a>`).join('')}</div>`;
 }
+
+// ══════════════════════════════════════════════════════════════
+//  INSTAGRAM — TOKEN AUTH & REAL DATA
+// ══════════════════════════════════════════════════════════════
+async function fetchIGData(token){
+  try {
+    const r = await fetch(`https://graph.instagram.com/me?fields=id,username,followers_count,media_count,biography&access_token=${token}`);
+    const data = await r.json();
+    if(data.error){ showToast('⚠️','Token inválido ou expirado'); return; }
+    const kpis = document.getElementById('ig-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="kpi"><div class="kpi-v">${(data.followers_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Seguidores</div><div class="kpi-d" style="color:var(--green);">@${data.username}</div></div>
+      <div class="kpi"><div class="kpi-v">${(data.media_count||0).toLocaleString('pt-BR')}</div><div class="kpi-l">Posts publicados</div></div>
+      <div class="kpi"><div class="kpi-v" style="font-size:16px;color:var(--t2);">Real</div><div class="kpi-l">Dados ao vivo</div></div>
+      <div class="kpi"><div class="kpi-v" style="font-size:16px;color:var(--green);">✓</div><div class="kpi-l">API conectada</div></div>`;
+    // Fetch recent media
+    const mr = await fetch(`https://graph.instagram.com/me/media?fields=id,caption,media_type,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=5&access_token=${token}`);
+    const mdata = await mr.json();
+    if(mdata.data){
+      const postsEl = document.getElementById('ig-posts');
+      if(postsEl) postsEl.innerHTML = mdata.data.map(p=>{
+        const emoji = p.media_type==='VIDEO'?'🎬':p.media_type==='CAROUSEL_ALBUM'?'🖼️':'📸';
+        const caption = (p.caption||'').slice(0,60)+(p.caption?.length>60?'...':'');
+        const eng = p.like_count ? ((p.like_count/(data.followers_count||1))*100).toFixed(1)+'%' : '—';
+        return `<div class="post-row"><div class="post-th">${emoji}</div><div class="post-b"><div class="post-t">${caption||'Sem legenda'}</div><div class="post-m">❤️ ${(p.like_count||0).toLocaleString('pt-BR')} · 💬 ${(p.comments_count||0).toLocaleString('pt-BR')}</div></div><span class="post-e">${eng}</span></div>`;
+      }).join('');
+    }
+  } catch(e){ showToast('⚠️','Erro ao buscar dados do Instagram'); }
+}
+
+function renderIGConnect(){
+  const token = ST.igToken || '';
+  return `
+    <div class="block" style="margin-bottom:16px;border:1px solid ${token?'var(--green-l)':'var(--amber-l)'};background:${token?'rgba(77,170,107,.06)':'rgba(207,159,83,.06)'};">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${token?'0':'12px'};">
+        <span style="font-size:20px;">${token?'✅':'🔗'}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">${token?'Instagram conectado':'Conectar Instagram'}</div>
+          <div style="font-size:11px;color:var(--t3);">${token?'Usando dados reais da sua conta':'Cole seu Access Token do Instagram Graph API'}</div>
+        </div>
+        ${token?`<button class="btn btn-ghost" style="font-size:11px;color:var(--red);" onclick="G.igDisconnect()">Desconectar</button>`:''}
+      </div>
+      ${!token?`
+      <div style="display:flex;gap:8px;">
+        <input type="password" id="ig-token-input" placeholder="Cole aqui seu Instagram Access Token..." style="flex:1;font-size:12px;">
+        <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;" onclick="G.igConnect()">Conectar</button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--t3);line-height:1.6;">
+        📖 Para obter seu token: <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--amber);">Meta Graph API Explorer</a> → selecione sua conta → permissões: <code style="background:var(--bg-hh);padding:1px 5px;border-radius:3px;">instagram_basic, instagram_manage_insights</code>
+      </div>`:''}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EDITORIAL — POST NOTAS (nova lógica de renderização)
+// ══════════════════════════════════════════════════════════════
+function renderPostDetail(p){
+  if(!p) return '<div class="empty">Sem posts neste dia</div>';
+  const stM={idea:{lbl:'Ideia',cls:'s-bk'},production:{lbl:'Produção',cls:'s-do'},ready:{lbl:'Pronto',cls:'s-rv'},published:{lbl:'Publicado',cls:'s-dn'}};
+  const st=stM[p.status]||{lbl:p.status,cls:'s-bk'};
+  return `
+    <div style="padding:12px;background:var(--bg-i);border:1px solid var(--b);border-radius:var(--r2);margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:16px;">${p.type==='story'?'🟣':p.type==='feed'?'🔵':'🟠'}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">${p.theme}</div>
+          <div style="display:flex;gap:6px;margin-top:3px;"><span class="prop ${st.cls}" style="font-size:10px;">${st.lbl}</span></div>
+        </div>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="G.advancePost('${p.id}')">→ Avançar</button>
+        <button class="del" onclick="G.delPost('${p.id}')">✕</button>
+      </div>
+      <div style="border-top:1px solid var(--b);padding-top:10px;">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:5px;">📝 Roteiro & Direcionamento</div>
+        <textarea id="pn-${p.id}" placeholder="Escreva o roteiro, direcionamentos, pontos principais do post..." style="width:100%;background:var(--bg-c);border:1px solid var(--b);border-radius:var(--r);color:var(--t);font-size:12px;font-family:Inter,sans-serif;padding:8px;resize:vertical;min-height:80px;line-height:1.6;" onchange="G.savePostNotes('${p.id}',this.value)">${p.notes||''}</textarea>
+      </div>
+      <div style="border-top:1px solid var(--b);padding-top:10px;margin-top:8px;">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:5px;">🔗 Referências</div>
+        ${(p.refs||[]).map((r,i)=>`
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <a href="${r.url}" target="_blank" style="flex:1;font-size:12px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.label||r.url}</a>
+            <button class="del" onclick="G.delPostRef('${p.id}',${i})">✕</button>
+          </div>`).join('')}
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <input type="text" id="pr-label-${p.id}" placeholder="Título da referência..." style="flex:1;font-size:11px;">
+          <input type="url" id="pr-url-${p.id}" placeholder="https://..." style="flex:1.5;font-size:11px;">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;white-space:nowrap;" onclick="G.addPostRef('${p.id}')">+ Ref</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INIT — executa após todas as declarações const
+// ══════════════════════════════════════════════════════════════
+renderSidebar();renderDash();loadNews();
 </script>
 </body>
 </html>
