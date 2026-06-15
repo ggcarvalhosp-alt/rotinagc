@@ -616,6 +616,15 @@ input[type=range]:focus{border:none;outline:none;}
           <div id="rotina-tasks"></div>
         </div>
       </div>
+
+      <!-- Performance dashboard -->
+      <div class="block" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="block-title" style="margin-bottom:0;">📊 Dashboard de Desempenho — últimos 14 dias</div>
+          <span style="font-size:10px;color:var(--t3);">Verde = todos feitos · Azul = parcial · (–) = sem dados</span>
+        </div>
+        <div id="habit-perf"></div>
+      </div>
     </div>
 
     <!-- ══ DEMANDAS ══════════════════════════════ -->
@@ -728,7 +737,11 @@ input[type=range]:focus{border:none;outline:none;}
     <!-- ══ EDITORIAL ══════════════════════════════ -->
     <div class="page" id="page-editorial">
       <div class="page-title">Cronograma Editorial</div>
-      <div class="page-subtitle">Planejamento de conteúdo mensal</div>
+      <div class="page-subtitle">Planejamento de conteúdo — 3 perfis</div>
+
+      <!-- Profile tabs -->
+      <div class="tabs" id="ed-profile-tabs" style="margin-bottom:16px;"></div>
+
       <div style="display:flex;gap:14px;">
         <div style="flex:1;">
           <div class="block">
@@ -839,6 +852,7 @@ input[type=range]:focus{border:none;outline:none;}
 // ══════════════════════════════════════════════════════════════
 const d0=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const dPlus=n=>{const d=new Date();d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+
 const dMinus=n=>dPlus(-n);
 const fmtDate=s=>{if(!s)return'';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;};
 const MN=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -914,6 +928,9 @@ if(ST.igTokenExpiry===undefined)ST.igTokenExpiry=null;
 if(ST.igLastFetch===undefined)ST.igLastFetch=null;
 if(!ST.blogPosts)ST.blogPosts=INIT.blogPosts;
 ST.contacts.forEach(c=>{if(!c.projects)c.projects=[];if(!c.interactions)c.interactions=[];});
+if(!ST.habitHistory)ST.habitHistory=[];
+if(!ST.edProfile)ST.edProfile='empresario';
+ST.posts.forEach(p=>{if(!p.profile)p.profile='empresario';});
 function save(){localStorage.setItem('gcnotion',JSON.stringify(ST));}
 
 // ══════════════════════════════════════════════════════════════
@@ -969,10 +986,21 @@ const G={
   openND(){document.getElementById('ndm').classList.add('open');},
   closeND(){document.getElementById('ndm').classList.remove('open');},
   confirmND(){
-    ST.tasks.filter(t=>t.recurring==='daily'&&t.status==='done').forEach(t=>t.status='backlog');
+    const yesterday=ST.lastDate||d0();
+    if(!ST.habitHistory)ST.habitHistory=[];
+    const doneIds=ST.habits.filter(h=>h.doneToday).map(h=>h.id);
+    ST.habitHistory.push({date:yesterday,done:doneIds,total:ST.habits.length,doneCount:doneIds.length});
+    if(ST.habitHistory.length>90)ST.habitHistory=ST.habitHistory.slice(-90);
     ST.habits.forEach(h=>{h.streak=h.doneToday?h.streak+1:0;h.doneToday=false;});
+    const today=d0();const now=new Date(today);
+    ST.tasks.forEach(t=>{
+      if(!t.recurring||t.recurring==='none')return;
+      if(t.recurring==='daily'){t.status='backlog';t.dueDate=today;}
+      else if(t.recurring==='weekly'&&t.dueDate){const d=new Date(t.dueDate);if((now-d)/86400000>=7){t.status='backlog';t.dueDate=today;}}
+      else if(t.recurring==='monthly'&&t.dueDate){const d=new Date(t.dueDate);if((now-d)/86400000>=28){t.status='backlog';t.dueDate=today;}}
+    });
     ST.tasks=ST.tasks.filter(t=>t.recurring!=='none'||t.status!=='done');
-    ST.streak++;ST.daysActive++;ST.lastDate=d0();
+    ST.streak++;ST.daysActive++;ST.lastDate=today;
     save();G.closeND();renderPage(curPage);renderSidebar();showToast('🌅','Novo dia! Streak: '+ST.streak);
   },
   closeLU(){document.getElementById('lu').classList.remove('show');},
@@ -981,6 +1009,7 @@ const G={
   dashTab(p,el){ST.dashPeriod=p;document.querySelectorAll('#page-dash .tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');save();renderDash();},
   demTab(p,el){ST.demPeriod=p;document.querySelectorAll('#page-demandas .tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');save();renderDemandas();},
   toggleDemView(){ST.demView=ST.demView==='list'?'kanban':'list';document.getElementById('dem-view-btn').textContent=ST.demView==='list'?'⊞ Kanban':'☰ Lista';save();renderDemandas();},
+  edSetProfile(p){ST.edProfile=p;save();renderEditorial();},
   addTask(){
     const title=document.getElementById('tf-title').value.trim();if(!title)return;
     const cat=document.getElementById('tf-cat').value,prio=document.getElementById('tf-prio').value;
@@ -1139,7 +1168,8 @@ const G={
     const type=document.getElementById('edf-type').value;
     const theme=document.getElementById('edf-theme').value.trim();if(!theme)return;
     const status=document.getElementById('edf-status').value;
-    ST.posts.push({id:'p'+Date.now(),date,type,theme,status});
+    const profile=ST.edProfile||'empresario';
+    ST.posts.push({id:'p'+Date.now(),date,type,theme,status,profile});
     document.getElementById('edf-theme').value='';save();G.toggle('edf');renderEditorial();gainXP(150,'📅','Post planejado');
   },
   advancePost(id){
@@ -1352,11 +1382,14 @@ function renderDash(){
   document.getElementById('dash-focus').innerHTML=ft?`<div class="focus-block"><div class="focus-icon">🎯</div><div style="flex:1;"><div class="focus-label">Foco do dia</div><div class="focus-title">${ft.title}</div></div><span class="prop prop-amber">+${ft.xp} XP</span></div>`:'';
 
   // Alerts
-  const overdue=ST.tasks.filter(t=>t.dueDate&&t.dueDate<today&&t.status!=='done');
+  const overdue=ST.tasks.filter(t=>t.dueDate&&t.dueDate<today&&t.status!=='done'&&t.recurring==='none');
+  const urgentToday=ST.tasks.filter(t=>t.dueDate===today&&t.status!=='done'&&t.priority==='Alta');
   const atRisk=ST.goals.filter(g=>g.progress<30&&g.deadline&&g.deadline<dPlus(30));
   let ah='';
-  overdue.forEach(t=>{ah+=`<div class="alert-row warn">⚠️ <span><b>${t.title}</b> — prazo ${fmtDate(t.dueDate)}</span></div>`;});
+  overdue.forEach(t=>{ah+=`<div class="alert-row warn" style="cursor:pointer;" onclick="G.nav('demandas',document.querySelector('.sb-item[onclick*=demandas]')||{classList:{add:()=>{},remove:()=>{}}})">⚠️ <span><b>${t.title}</b> — atrasada desde ${fmtDate(t.dueDate)}</span></div>`;});
+  urgentToday.forEach(t=>{ah+=`<div class="alert-row warn" style="background:rgba(235,87,87,.08);border-left:3px solid var(--red);cursor:pointer;">🔴 <span><b>${t.title}</b> — urgente hoje</span></div>`;});
   atRisk.forEach(g=>{ah+=`<div class="alert-row info">📉 Meta <b>${g.title}</b> em risco (${g.progress}%)</div>`;});
+  if(!overdue.length&&!urgentToday.length){const pendHabits=ST.habits.filter(h=>!h.doneToday).length;if(pendHabits)ah+=`<div class="alert-row info">⏰ <span>${pendHabits} hábito${pendHabits>1?'s':''} pendente${pendHabits>1?'s':''} hoje</span></div>`;}
   document.getElementById('dash-alerts').innerHTML=ah||'<div class="empty" style="padding:10px;">✅ Tudo em ordem</div>';
 
   // Events today
@@ -1370,14 +1403,19 @@ function renderDash(){
       <div class="pw"><div class="pb pb-blue" style="width:${g.progress}%"></div></div>
     </div>`).join('')||'<div class="empty">Nenhuma meta</div>';
 
-  // Chart
+  // Chart — dados reais de habitHistory
   dc('prod');
-  const labels=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-  const data=[4,7,5,9,6,8,doneT.length];
+  const chartDays=[];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const dn=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()];const h=(ST.habitHistory||[]).find(x=>x.date===ds);chartDays.push({label:dn,done:h?h.doneCount:(ds===today?doneH.length:0),total:h?h.total:(ST.habits.length||1)});}
+  const chartLabels=chartDays.map(d=>d.label);
+  const chartData=chartDays.map(d=>d.done);
+  const chartBg=chartDays.map((d,i)=>d.done>0&&d.done===d.total?'rgba(77,170,107,.7)':'rgba(35,131,226,.5)');
+  const chartBorder=chartDays.map(d=>d.done>0&&d.done===d.total?'#4DAA6B':'#2383E2');
+  const chartMax=Math.max(...chartDays.map(d=>d.total),4);
   setTimeout(()=>{
     const ctx=document.getElementById('chart-prod');if(!ctx)return;
     Chart.defaults.color='#636262';Chart.defaults.font.family='Inter';
-    charts['prod']=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#2383E2',backgroundColor:'rgba(35,131,226,.08)',tension:.4,fill:true,pointBackgroundColor:'#2383E2',pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{plugins:{legend:{display:false},tooltip:{backgroundColor:'#252525',borderColor:'#333',borderWidth:1,padding:8,titleFont:{family:'Inter'},bodyFont:{family:'Inter'}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11}},beginAtZero:true}}}});
+    charts['prod']=new Chart(ctx,{type:'bar',data:{labels:chartLabels,datasets:[{label:'Hábitos',data:chartData,backgroundColor:chartBg,borderColor:chartBorder,borderWidth:2,borderRadius:5}]},options:{plugins:{legend:{display:false},tooltip:{backgroundColor:'#252525',borderColor:'#333',borderWidth:1,padding:8,titleFont:{family:'Inter'},bodyFont:{family:'Inter'},callbacks:{label:c=>`${c.raw} de ${chartDays[c.dataIndex].total} hábitos`}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:11},stepSize:1},beginAtZero:true,max:chartMax+1}}}});
   },50);
 }
 
@@ -1415,6 +1453,38 @@ function renderRotina(){
   let rth=`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2);margin-bottom:6px;"><span>${dT} de ${todayT.length} demandas</span><span style="font-weight:600;">${pctT}%</span></div><div class="pw" style="margin-bottom:12px;"><div class="pb ${pctT===100?'pb-green':'pb-blue'}" style="width:${pctT}%"></div></div>`;
   rth+=todayT.map(t=>taskRowHtml(t)).join('')||'<div class="empty">Nenhuma demanda para hoje</div>';
   document.getElementById('rotina-tasks').innerHTML=rth;
+
+  // Performance dashboard — últimos 14 dias
+  const perfEl=document.getElementById('habit-perf');
+  if(!perfEl)return;
+  const hist=ST.habitHistory||[];
+  if(!hist.length&&!ST.habits.length){perfEl.innerHTML='<div class="empty">Complete hábitos para ver o histórico</div>';return;}
+  // Build last 14 days
+  const days14=[];
+  for(let i=13;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const dn=['D','S','T','Q','Q','S','S'][d.getDay()];const h=hist.find(x=>x.date===ds);days14.push({ds,dn,entry:h||(ds===today?{done:ST.habits.filter(h=>h.doneToday).map(h=>h.id),total:ST.habits.length,doneCount:ST.habits.filter(h=>h.doneToday).length}:null)});}
+  // Per-habit grid
+  let ph=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">
+    <thead><tr><th style="text-align:left;padding:4px 6px;color:var(--t3);font-weight:500;min-width:120px;">Hábito</th>${days14.map(d=>`<th style="text-align:center;padding:4px 3px;color:var(--t3);font-weight:500;width:28px;">${d.dn}</th>`).join('')}</tr></thead>
+    <tbody>`;
+  sorted.forEach(h=>{
+    ph+=`<tr><td style="padding:4px 6px;color:var(--t2);white-space:nowrap;">${h.icon} ${h.title}</td>`;
+    days14.forEach(day=>{
+      const done=day.entry&&day.entry.done&&day.entry.done.includes(h.id);
+      const hasData=!!day.entry;
+      ph+=`<td style="text-align:center;padding:3px;"><div style="width:20px;height:20px;border-radius:4px;margin:0 auto;background:${done?'var(--green)':hasData?'rgba(255,255,255,.06)':'transparent'};display:flex;align-items:center;justify-content:center;font-size:10px;">${done?'✓':hasData?'·':''}</div></td>`;
+    });
+    ph+='</tr>';
+  });
+  // Total row
+  ph+=`<tr style="border-top:1px solid var(--b);"><td style="padding:5px 6px;color:var(--t3);font-size:10px;">Total feitos</td>`;
+  days14.forEach(day=>{
+    const cnt=day.entry?day.entry.doneCount:0;
+    const tot=day.entry?day.entry.total:0;
+    const full=tot>0&&cnt===tot;
+    ph+=`<td style="text-align:center;padding:3px;font-size:10px;color:${full?'var(--green)':cnt>0?'var(--blue)':'var(--t3)'};">${day.entry?(cnt+'/'+tot):'—'}</td>`;
+  });
+  ph+=`</tr></tbody></table></div>`;
+  perfEl.innerHTML=ph;
 }
 
 // ─ DEMANDAS ────────────────────────────────────────────────────
@@ -1611,7 +1681,18 @@ function renderIG(){
 }
 
 // ─ EDITORIAL ───────────────────────────────────────────────────
+const ED_PROFILES=[
+  {id:'empresario',label:'Empresário',icon:'🏢'},
+  {id:'criativo',label:'Criativo',icon:'🎨'},
+  {id:'marketing',label:'Marketing',icon:'📣'},
+];
 function renderEditorial(){
+  const prof=ST.edProfile||'empresario';
+  // Render profile tabs
+  const tabsEl=document.getElementById('ed-profile-tabs');
+  if(tabsEl){
+    tabsEl.innerHTML=ED_PROFILES.map(p=>`<div class="tab ed-profile-tab${prof===p.id?' on':''}" data-prof="${p.id}" onclick="G.edSetProfile('${p.id}')">${p.icon} ${p.label}</div>`).join('');
+  }
   const y=ST.edY,m=ST.edM;
   document.getElementById('ed-month-title').textContent=MN[m]+' '+y;
   const first=new Date(y,m,1).getDay(),dIM=new Date(y,m+1,0).getDate();
@@ -1621,26 +1702,25 @@ function renderEditorial(){
   for(let i=first-1;i>=0;i--)html+=`<div class="ed-cell om"><div class="ed-num">${prevD-i}</div></div>`;
   for(let day=1;day<=dIM;day++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const dayP=ST.posts.filter(p=>p.date===ds);
+    const dayP=ST.posts.filter(p=>p.date===ds&&(p.profile||'empresario')===prof);
     const dots=dayP.map(p=>`<div class="ed-post ${p.type==='story'?'ep-s':p.type==='feed'?'ep-f':'ep-r'}" onclick="event.stopPropagation();G.openPostModal('${p.id}')" style="cursor:pointer;">${p.type==='story'?'Story':p.type==='feed'?'Feed':'Reels'}</div>`).join('');
     html+=`<div class="ed-cell${ds===today?' today':''}${ds===sel?' sel':''}" onclick="G.edSelectDay('${ds}')"><div class="ed-num">${day}</div>${dots}</div>`;
   }
   const rem=(7-(first+dIM)%7)%7;for(let i=1;i<=rem;i++)html+=`<div class="ed-cell om"><div class="ed-num">${i}</div></div>`;
   document.getElementById('ed-cal').innerHTML=html;
 
-  const selP=ST.posts.filter(p=>p.date===sel);
+  const selP=ST.posts.filter(p=>p.date===sel&&(p.profile||'empresario')===prof);
   document.getElementById('ed-detail-title').textContent=fmtDate(sel);
-  // Use renderPostDetail for rich notes UI
   document.getElementById('ed-detail').innerHTML=selP.length
     ? selP.map(p=>renderPostDetail(p)).join('')
     : '<div class="empty">Sem posts neste dia</div>';
 
-  const mon=ST.posts.filter(p=>p.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}`));
-  const pub=mon.filter(p=>p.status==='published').length;
+  const mon=ST.posts.filter(p=>p.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)&&(p.profile||'empresario')===prof);
+  const pub=mon.filter(p=>p.status==='postado').length;
   document.getElementById('ed-summary').innerHTML=`
     <div class="g2" style="gap:6px;">
       <div class="kpi" style="padding:10px;"><div class="kpi-v" style="font-size:18px;">${mon.length}</div><div class="kpi-l">Total</div></div>
-      <div class="kpi" style="padding:10px;"><div class="kpi-v" style="font-size:18px;color:var(--green);">${pub}</div><div class="kpi-l">Publicados</div></div>
+      <div class="kpi" style="padding:10px;"><div class="kpi-v" style="font-size:18px;color:var(--green);">${pub}</div><div class="kpi-l">Postados</div></div>
       <div class="kpi" style="padding:10px;"><div class="kpi-v" style="font-size:18px;color:var(--purple);">${mon.filter(p=>p.type==='story').length}</div><div class="kpi-l">Stories</div></div>
       <div class="kpi" style="padding:10px;"><div class="kpi-v" style="font-size:18px;color:var(--orange);">${mon.filter(p=>p.type==='reel').length}</div><div class="kpi-l">Reels</div></div>
     </div>`;
@@ -2164,9 +2244,39 @@ function renderPostDetail(p){
 }
 
 // ══════════════════════════════════════════════════════════════
+//  AUTO DAY RESET — detecta virada de dia e reseta hábitos/tarefas
+// ══════════════════════════════════════════════════════════════
+function checkAndResetDay(){
+  const today=d0();
+  if(!ST.lastDate||ST.lastDate===today)return;
+  // Salva histórico de hábitos do dia anterior
+  if(!ST.habitHistory)ST.habitHistory=[];
+  const doneIds=ST.habits.filter(h=>h.doneToday).map(h=>h.id);
+  ST.habitHistory.push({date:ST.lastDate,done:doneIds,total:ST.habits.length,doneCount:doneIds.length});
+  if(ST.habitHistory.length>90)ST.habitHistory=ST.habitHistory.slice(-90);
+  // Reset hábitos
+  ST.habits.forEach(h=>{h.streak=h.doneToday?h.streak+1:0;h.doneToday=false;});
+  // Reset tarefas recorrentes
+  const now=new Date(today);
+  ST.tasks.forEach(t=>{
+    if(!t.recurring||t.recurring==='none')return;
+    if(t.recurring==='daily'){t.status='backlog';t.dueDate=today;}
+    else if(t.recurring==='weekly'&&t.dueDate){const d=new Date(t.dueDate);if((now-d)/86400000>=7){t.status='backlog';t.dueDate=today;}}
+    else if(t.recurring==='monthly'&&t.dueDate){const d=new Date(t.dueDate);if((now-d)/86400000>=28){t.status='backlog';t.dueDate=today;}}
+  });
+  // Remove tarefas únicas concluídas
+  ST.tasks=ST.tasks.filter(t=>t.recurring!=='none'||t.status!=='done');
+  ST.streak++;ST.daysActive++;ST.lastDate=today;
+  save();renderPage(curPage);renderSidebar();
+  showToast('🌅','Novo dia! Streak: '+ST.streak);
+}
+
+// ══════════════════════════════════════════════════════════════
 //  INIT — executa após todas as declarações const
 // ══════════════════════════════════════════════════════════════
+checkAndResetDay();
 renderSidebar();renderDash();loadNews();
+setInterval(checkAndResetDay,60000);
 </script>
 </body>
 </html>
