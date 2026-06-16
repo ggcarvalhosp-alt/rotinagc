@@ -225,14 +225,15 @@ select option{background:var(--bg-s);}
 .cal-month{font-size:14px;font-weight:600;flex:1;}
 .cal-grid-wrap{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
 .cal-dh{text-align:center;font-size:10px;font-weight:600;color:var(--t3);padding:6px 0;letter-spacing:.05em;}
-.cal-d{min-height:70px;background:var(--bg-c);border:1px solid var(--b);border-radius:var(--r2);padding:6px;cursor:pointer;transition:border-color .12s;}
+.cal-d{height:96px;background:var(--bg-c);border:1px solid var(--b);border-radius:var(--r2);padding:6px;cursor:pointer;transition:border-color .12s;overflow:hidden;display:flex;flex-direction:column;}
 .cal-d:hover{border-color:var(--b2);}
 .cal-d.today{border-color:var(--blue);background:var(--blue-l);}
-.cal-d.sel{border-color:var(--b2);}
-.cal-d.om{opacity:.25;pointer-events:none;}
-.cal-dn{font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px;}
+.cal-d.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber);}
+.cal-d.om{opacity:.2;pointer-events:none;}
+.cal-dn{font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px;flex-shrink:0;}
 .cal-d.today .cal-dn{color:var(--blue);font-weight:700;}
-.cal-ev{font-size:9px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-d.sel .cal-dn{color:var(--amber);}
+.cal-ev{font-size:9px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;}
 
 /* ─ HABIT ROW ─────────────────────────── */
 .habit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r);margin-bottom:2px;transition:background .1s;}
@@ -664,7 +665,7 @@ input[type=range]:focus{border:none;outline:none;}
     <div class="page" id="page-agenda">
       <div class="page-title">Agenda</div>
       <div class="page-subtitle">Compromissos e reuniões</div>
-      <div class="g2">
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;">
         <div class="block" style="margin-bottom:0;">
           <div class="cal-nav">
             <button class="cal-btn" onclick="G.agNav(-1)">‹</button>
@@ -674,17 +675,17 @@ input[type=range]:focus{border:none;outline:none;}
           <div class="cal-grid-wrap">
             <div class="cal-dh">Dom</div><div class="cal-dh">Seg</div><div class="cal-dh">Ter</div><div class="cal-dh">Qua</div><div class="cal-dh">Qui</div><div class="cal-dh">Sex</div><div class="cal-dh">Sáb</div>
           </div>
-          <div class="cal-grid-wrap" id="ag-cal" style="margin-top:3px;"></div>
+          <div class="cal-grid-wrap" id="ag-cal" style="margin-top:4px;gap:4px;"></div>
         </div>
-        <div>
-          <div class="block">
-            <div class="block-title" id="ag-detail-title">Hoje</div>
+        <div style="position:sticky;top:68px;">
+          <div class="block" style="margin-bottom:12px;">
+            <div class="block-title" id="ag-detail-title" style="font-size:14px;margin-bottom:14px;">Hoje</div>
             <div id="ag-detail"></div>
-            <button class="btn-add" style="margin-top:8px;" onclick="G.toggle('agf')">＋ Novo compromisso</button>
-            <div class="fp" id="agf">
+            <button class="btn-add" style="margin-top:12px;" onclick="G.toggle('agf')">＋ Novo compromisso</button>
+            <div class="fp" id="agf" style="margin-top:10px;">
               <div class="fr"><input type="date" id="agf-d"><input type="time" id="agf-t"></div>
               <div class="fr"><input type="text" id="agf-title" placeholder="Título..." style="flex:2;"><select id="agf-type"><option value="meeting">Reunião</option><option value="personal">Pessoal</option><option value="event">Evento</option><option value="deadline">Prazo</option></select></div>
-              <input type="text" id="agf-loc" placeholder="Local / Link..." style="margin-bottom:8px;">
+              <input type="text" id="agf-loc" placeholder="Local / Link..." style="margin-bottom:10px;">
               <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-ghost" onclick="G.toggle('agf')">Cancelar</button><button class="btn btn-primary" onclick="G.addEvent()">Adicionar</button></div>
             </div>
           </div>
@@ -1580,12 +1581,17 @@ function renderAgenda(){
   const selEvs=ST.events.filter(e=>e.date===sel).sort((a,b)=>a.time.localeCompare(b.time));
   document.getElementById('ag-detail-title').textContent=fmtDate(sel);
   document.getElementById('ag-detail').innerHTML=selEvs.map(e=>`
-    <div class="db-row${e.done?' done':''}">
-      <div class="chk${e.done?' on':''}" onclick="G.toggleEvent('${e.id}')">${e.done?'✓':''}</div>
-      <div class="dot ${evDot(e.type)}" style="margin-top:5px;flex-shrink:0;"></div>
-      <div class="row-body"><div class="row-title">${e.time} — ${e.title}</div>${e.location?`<div style="font-size:11px;color:var(--t3);">📍 ${e.location}</div>`:''}</div>
-      <div class="row-actions"><button class="del" onclick="G.delEvent('${e.id}')">✕</button></div>
-    </div>`).join('')||'<div class="empty">Nenhum compromisso</div>';
+    <div class="db-row${e.done?' done':''}" style="padding:10px 8px;margin-bottom:4px;">
+      <div class="chk${e.done?' on':''}" onclick="G.toggleEvent('${e.id}')" style="margin-top:2px;flex-shrink:0;">${e.done?'✓':''}</div>
+      <div class="row-body" style="min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:${e.location?'3':'0'}px;">
+          <div class="dot ${evDot(e.type)}" style="flex-shrink:0;"></div>
+          <div class="row-title" style="font-size:13px;font-weight:600;">${e.title}</div>
+        </div>
+        <div style="font-size:11px;color:var(--t3);padding-left:13px;">${e.time}${e.location?` · 📍 ${e.location}`:''}</div>
+      </div>
+      <div class="row-actions" style="flex-shrink:0;"><button class="del" onclick="G.delEvent('${e.id}')">✕</button></div>
+    </div>`).join('')||'<div style="color:var(--t3);font-size:13px;padding:8px 0;">Nenhum compromisso neste dia</div>';
 
   const agfD=document.getElementById('agf-d');if(agfD)agfD.value=sel;
 }
