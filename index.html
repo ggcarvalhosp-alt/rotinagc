@@ -836,11 +836,15 @@ input[type=range]:focus{border:none;outline:none;}
       <div class="g4" id="meta-kpis" style="margin-bottom:20px;"></div>
       <div id="metas-list"></div>
       <div class="fp" id="gf">
+        <input type="hidden" id="gf-edit-id">
+        <div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:10px;" id="gf-head">Nova meta</div>
         <div class="fr"><input type="text" id="gf-title" placeholder="Título da meta..." style="flex:2;"><select id="gf-area"><option>Financeiro</option><option>Marketing</option><option>Equipe</option><option>Pessoal</option><option>Produto</option><option>Saúde</option></select></div>
         <div class="fr"><select id="gf-hor"><option value="monthly">Mensal</option><option value="semester">Semestral</option><option value="annual">Anual</option></select><input type="date" id="gf-dl"><input type="text" id="gf-metric" placeholder="Métrica de sucesso..."></div>
         <textarea id="gf-desc" placeholder="Descrição / critério de sucesso..." style="margin-bottom:8px;resize:vertical;min-height:50px;"></textarea>
-        <div class="fr"><input type="text" id="gf-ms1" placeholder="Marco 1..."><input type="text" id="gf-ms2" placeholder="Marco 2..."><input type="text" id="gf-ms3" placeholder="Marco 3..."></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;"><button class="btn btn-ghost" onclick="G.toggle('gf')">Cancelar</button><button class="btn btn-primary" onclick="G.addMeta()">Criar meta</button></div>
+        <div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:600;">MARCOS (até 4)</div>
+        <div class="fr"><input type="text" id="gf-ms1" placeholder="Marco 1..."><input type="text" id="gf-ms2" placeholder="Marco 2..."></div>
+        <div class="fr"><input type="text" id="gf-ms3" placeholder="Marco 3..."><input type="text" id="gf-ms4" placeholder="Marco 4..."></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="btn btn-ghost" onclick="G.cancelMetaForm()">Cancelar</button><button class="btn btn-primary" id="gf-btn" onclick="G.addMeta()">Criar meta</button></div>
       </div>
     </div>
 
@@ -1203,22 +1207,68 @@ const G={
     const area=document.getElementById('gf-area').value,hor=document.getElementById('gf-hor').value;
     const dl=document.getElementById('gf-dl').value,metric=document.getElementById('gf-metric').value;
     const desc=document.getElementById('gf-desc').value;
-    const ms=['gf-ms1','gf-ms2','gf-ms3'].map((id,i)=>{const v=document.getElementById(id).value.trim();document.getElementById(id).value='';return v;}).filter(Boolean).map((t,i)=>({id:'gm'+Date.now()+i,text:t,done:false}));
-    ST.goals.push({id:'g'+Date.now(),title,desc,horizon:hor,area,metric,progress:0,deadline:dl,milestones:ms});
-    ['gf-title','gf-desc','gf-metric'].forEach(id=>document.getElementById(id).value='');
-    save();G.toggle('gf');renderMetas();
+    const msTexts=['gf-ms1','gf-ms2','gf-ms3','gf-ms4'].map(id=>document.getElementById(id).value.trim()).filter(Boolean);
+    const editId=document.getElementById('gf-edit-id').value;
+    if(editId){
+      const g=ST.goals.find(x=>x.id===editId);
+      if(g){
+        g.title=title;g.area=area;g.horizon=hor;g.deadline=dl;g.metric=metric;g.desc=desc;
+        // preserve done state for matching texts
+        const prev=g.milestones;
+        g.milestones=msTexts.map((t,i)=>{const ex=prev.find(m=>m.text===t);return ex||{id:'gm'+Date.now()+i,text:t,done:false};});
+        // recalculate progress
+        if(g.milestones.length)g.progress=Math.round(g.milestones.filter(m=>m.done).length/g.milestones.length*100);
+      }
+      showToast('✏️','Meta atualizada');
+    } else {
+      const ms=msTexts.map((t,i)=>({id:'gm'+Date.now()+i,text:t,done:false}));
+      ST.goals.push({id:'g'+Date.now(),title,desc,horizon:hor,area,metric,progress:0,deadline:dl,milestones:ms});
+      gainXP(200,'🎯','Nova meta criada');
+    }
+    G.cancelMetaForm();save();renderMetas();
+  },
+  cancelMetaForm(){
+    ['gf-title','gf-desc','gf-metric','gf-ms1','gf-ms2','gf-ms3','gf-ms4'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('gf-edit-id').value='';
+    document.getElementById('gf-btn').textContent='Criar meta';
+    document.getElementById('gf-head').textContent='Nova meta';
+    const fp=document.getElementById('gf');if(fp)fp.style.display='none';
+  },
+  editGoal(id){
+    const g=ST.goals.find(x=>x.id===id);if(!g)return;
+    document.getElementById('gf-title').value=g.title;
+    document.getElementById('gf-area').value=g.area;
+    document.getElementById('gf-hor').value=g.horizon;
+    document.getElementById('gf-dl').value=g.deadline||'';
+    document.getElementById('gf-metric').value=g.metric||'';
+    document.getElementById('gf-desc').value=g.desc||'';
+    ['gf-ms1','gf-ms2','gf-ms3','gf-ms4'].forEach((fid,i)=>{const el=document.getElementById(fid);if(el)el.value=g.milestones[i]?g.milestones[i].text:'';});
+    document.getElementById('gf-edit-id').value=id;
+    document.getElementById('gf-btn').textContent='Salvar edição';
+    document.getElementById('gf-head').textContent='Editar meta';
+    const fp=document.getElementById('gf');if(fp){fp.style.display='block';fp.scrollIntoView({behavior:'smooth',block:'nearest'});}
   },
   updateProgress(id,v){
-    const g=ST.goals.find(x=>x.id===id);if(!g)return;g.progress=parseInt(v);save();
+    const g=ST.goals.find(x=>x.id===id);if(!g)return;
+    g.progress=parseInt(v);save();
     const pEl=document.getElementById('gp-'+id);if(pEl)pEl.textContent=v+'%';
     const bEl=document.getElementById('gpb-'+id);if(bEl)bEl.style.width=v+'%';
+    // update KPIs live
+    const avg=ST.goals.length?Math.round(ST.goals.reduce((a,g)=>a+g.progress,0)/ST.goals.length):0;
+    const avgEl=document.getElementById('meta-avg');if(avgEl)avgEl.textContent=avg+'%';
+    const onEl=document.getElementById('meta-on');if(onEl)onEl.textContent=ST.goals.filter(g=>g.progress>=50).length;
+    const doneEl=document.getElementById('meta-done');if(doneEl)doneEl.textContent=ST.goals.filter(g=>g.progress===100).length;
   },
   toggleMS(gid,mid){
     const g=ST.goals.find(x=>x.id===gid);if(!g)return;
     const m=g.milestones.find(x=>x.id===mid);if(!m)return;
-    m.done=!m.done;if(m.done)gainXP(500,'🏆','Marco!');save();renderMetas();
+    m.done=!m.done;if(m.done)gainXP(500,'🏆','Marco atingido!');
+    // auto-calculate progress from milestones
+    if(g.milestones.length)g.progress=Math.round(g.milestones.filter(m=>m.done).length/g.milestones.length*100);
+    save();renderMetas();
   },
-  delGoal(id){ST.goals=ST.goals.filter(g=>g.id!==id);save();renderMetas();},
+  delGoal(id){if(!confirm('Excluir esta meta?'))return;ST.goals=ST.goals.filter(g=>g.id!==id);save();renderMetas();},
+  renderMetas(){renderMetas();},
 
   // ─ INSTAGRAM ─
   igConnect(){
@@ -1935,29 +1985,44 @@ function renderMetas(){
   if(ha!=='all')goals=goals.filter(g=>g.horizon===ha);
   if(area)goals=goals.filter(g=>g.area===area);
   const avg=ST.goals.length?Math.round(ST.goals.reduce((a,g)=>a+g.progress,0)/ST.goals.length):0;
+  const onTrack=ST.goals.filter(g=>g.progress>=50).length;
+  const done100=ST.goals.filter(g=>g.progress===100).length;
   document.getElementById('meta-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-v">${ST.goals.length}</div><div class="kpi-l">Total de metas</div></div>
-    <div class="kpi"><div class="kpi-v">${avg}%</div><div class="kpi-l">Média de progresso</div></div>
-    <div class="kpi"><div class="kpi-v">${ST.goals.filter(g=>g.progress>=50).length}</div><div class="kpi-l">No caminho certo</div></div>
-    <div class="kpi"><div class="kpi-v">${ST.goals.filter(g=>g.progress===100).length}</div><div class="kpi-l">Concluídas</div></div>`;
+    <div class="kpi"><div class="kpi-v" id="meta-avg">${avg}%</div><div class="kpi-l">Média de progresso</div></div>
+    <div class="kpi"><div class="kpi-v" id="meta-on">${onTrack}</div><div class="kpi-l">No caminho certo</div></div>
+    <div class="kpi"><div class="kpi-v" id="meta-done">${done100}</div><div class="kpi-l">Concluídas</div></div>`;
 
   const ACOL={Financeiro:'prop-amber',Marketing:'prop-orange',Equipe:'prop-purple',Pessoal:'prop-green',Produto:'prop-blue',Saúde:'prop-rose'};
   const HOR={monthly:'Mensal',semester:'Semestral',annual:'Anual'};
   document.getElementById('metas-list').innerHTML=goals.map(g=>{
-    const done=g.milestones.length&&g.milestones.every(m=>m.done);
-    return `<div class="goal-card${done?' done-g':''}">
+    const allDone=g.milestones.length&&g.milestones.every(m=>m.done);
+    const prog=g.progress||0;
+    const progColor=prog===100?'pb-green':prog>=50?'pb-blue':'pb-amber';
+    return `<div class="goal-card${allDone?' done-g':''}">
       <div class="goal-head">
         <div class="goal-title">${g.title}</div>
         <span class="prop ${ACOL[g.area]||'prop-gray'}" style="font-size:11px;">${g.area}</span>
         <span class="prop prop-gray" style="font-size:11px;">${HOR[g.horizon]||g.horizon}</span>
-        <button class="del" onclick="G.delGoal('${g.id}')">✕</button>
+        <button class="del" style="color:var(--t3);" onclick="G.editGoal('${g.id}')" title="Editar">✎</button>
+        <button class="del" onclick="G.delGoal('${g.id}')" title="Excluir">✕</button>
       </div>
       ${g.desc?`<div class="goal-desc">${g.desc}</div>`:''}
       ${g.metric?`<div class="goal-metric">🎯 ${g.metric}${g.deadline?` · 📅 ${fmtDate(g.deadline)}`:''}</div>`:''}
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2);margin-bottom:5px;"><span>Progresso</span><span id="gp-${g.id}" style="font-weight:600;">${g.progress}%</span></div>
-      <div class="pw" style="margin-bottom:8px;"><div class="pb pb-blue" id="gpb-${g.id}" style="width:${g.progress}%"></div></div>
-      <input type="range" min="0" max="100" value="${g.progress}" oninput="G.updateProgress('${g.id}',this.value)" style="width:100%;margin-bottom:10px;">
-      ${g.milestones.length?`<div class="ms-list">${g.milestones.map(m=>`<div class="ms-item${m.done?' done-ms':''}" onclick="G.toggleMS('${g.id}','${m.id}')"><span style="font-size:13px;">${m.done?'✅':'○'}</span><span>${m.text}</span>${m.done?'':'<span style=\"margin-left:auto;font-size:10px;color:var(--amber);\">+500 XP</span>'}</div>`).join('')}</div>`:''}</div>`;
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--t2);margin-bottom:5px;">
+        <span>Progresso</span>
+        <span id="gp-${g.id}" style="font-weight:700;font-size:14px;color:${prog===100?'var(--green)':prog>=50?'var(--blue)':'var(--amber)'};">${prog}%</span>
+      </div>
+      <div class="pw" style="height:6px;margin-bottom:6px;"><div class="pb ${progColor}" id="gpb-${g.id}" style="width:${prog}%;transition:width .4s ease;"></div></div>
+      <input type="range" min="0" max="100" value="${prog}" oninput="G.updateProgress('${g.id}',this.value)" style="width:100%;margin-bottom:12px;accent-color:var(--blue);">
+      ${g.milestones.length?`
+      <div style="font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.05em;margin-bottom:6px;">MARCOS — ${g.milestones.filter(m=>m.done).length}/${g.milestones.length} concluídos</div>
+      <div class="ms-list">${g.milestones.map(m=>`
+        <div class="ms-item${m.done?' done-ms':''}" onclick="G.toggleMS('${g.id}','${m.id}')">
+          <div class="chk${m.done?' on':''}" style="flex-shrink:0;">${m.done?'✓':''}</div>
+          <span style="flex:1;">${m.text}</span>
+          ${m.done?'<span style="font-size:10px;color:var(--green);">✓ feito</span>':'<span style="font-size:10px;color:var(--amber);">+500 XP</span>'}
+        </div>`).join('')}</div>`:''}</div>`;
   }).join('')||'<div class="empty">Nenhuma meta encontrada</div>';
 }
 
